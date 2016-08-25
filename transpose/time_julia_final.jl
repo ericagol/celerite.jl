@@ -1,15 +1,15 @@
 using PyPlot
-include("lorentz_likelihood_hermitian_band_init.jl")
-include("lorentz_likelihood_hermitian_band_save.jl")
+include("compile_matrix_symm.jl")
+include("compute_likelihood.jl")
 #include("lorentz_likelihood_hermitian.jl")
-include("bandec.jl")
-include("banbks.jl")
+include("bandec_trans.jl")
+include("banbks_trans.jl")
 
 
 # Compute time for Generalized Rybicki-Press with three Lorentzian components
 # for benchmarking:
 
-function time_julia()
+function time_julia_final()
 omega = 2pi/12.203317
 #alpha = [1.0428542, -0.38361831, 0.30345984/2, 0.30345984/2]*1.6467e-7
 alpha = [1.0428542, 0.30345984/2, 0.30345984/2]*1.6467e-7
@@ -33,8 +33,8 @@ for it=1:nnt
   nex = (2p+1)*n-2p
   width = 2p+3
   m1 = p+1
-  aex::Array{Complex{Float64},2} = zeros(Complex{Float64},nex,width)
-  al_small::Array{Complex{Float64},2} = zeros(Complex{Float64},nex,m1)
+  aex::Array{Complex{Float64},2} = zeros(Complex{Float64},width,nex)
+  al_small::Array{Complex{Float64},2} = zeros(Complex{Float64},m1,nex)
   indx::Vector{Int64} = collect(1:nex)
   tic()
 # See if I can look into types of this routine.
@@ -42,6 +42,23 @@ for it=1:nnt
   logdeta = lorentz_likelihood_hermitian_band_init(alpha,beta,w0,t,nex,aex,al_small,indx)
 #  aex_full,bex_full  = lorentz_likelihood_hermitian(alpha,beta,w0,t,y)
 #  eigval_aex = eigvals(aex_full)
+# Now use the new slimmed-down real version:
+  nex_final = (4(p_final-p0_final)+2p0_final+1)*(n-1)+1
+  m1_final = 2(p_final-p0_final)+p0_final+2
+  width_final = 2m1_final+1
+  aex_final = zeros(Float64,width_final,nex_final)
+  al_small_final = zeros(Float64,m1_final,nex_final)
+  indx_final= collect(1:nex_final)
+  tic()
+#  @code_warntype   compile_matrix_symm(alpha_final,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
+  logdeta_final= compile_matrix_symm(alpha_final,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
+  time_compute_final[it] = toq();
+  tic()
+#  @code_warntype   compute_likelihood(p_final,y,aex_final,al_small_final,indx_final,logdeta_final)
+  log_like_final= compute_likelihood(p_final,p0_final,y,aex_final,al_small_final,indx_final,logdeta_final)
+  time_likelihood_final[it] = toq();
+  println(n," final:   ",time_compute_final[it]," ",time_likelihood_final[it])
+
   
   time_compute[it] = toq();
   tic()

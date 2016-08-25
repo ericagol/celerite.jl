@@ -2,8 +2,8 @@ using PyPlot
 include("lorentz_likelihood_hermitian_band_init.jl")
 include("lorentz_likelihood_hermitian_band_save.jl")
 #include("lorentz_likelihood_hermitian.jl")
-include("bandec.jl")
-include("banbks.jl")
+include("bandec_trans.jl")
+include("banbks_trans.jl")
 
 
 # Compute time for Generalized Rybicki-Press with three Lorentzian components
@@ -33,8 +33,8 @@ for it=1:nnt
   nex = (2p+1)*n-2p
   width = 2p+3
   m1 = p+1
-  aex::Array{Complex{Float64},2} = zeros(Complex{Float64},nex,width)
-  al_small::Array{Complex{Float64},2} = zeros(Complex{Float64},nex,m1)
+  aex::Array{Complex{Float64},2} = zeros(Complex{Float64},width,nex)
+  al_small::Array{Complex{Float64},2} = zeros(Complex{Float64},m1,nex)
   indx::Vector{Int64} = collect(1:nex)
   tic()
 # See if I can look into types of this routine.
