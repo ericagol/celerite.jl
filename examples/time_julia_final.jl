@@ -1,8 +1,5 @@
 using PyPlot
-include("compile_matrix_symm.jl")
-include("compute_likelihood.jl")
-include("bandec_trans.jl")
-include("banbks_trans.jl")
+using GenRP
 
 
 # Compute time for Generalized Rybicki-Press with three Lorentzian components
@@ -69,7 +66,7 @@ for it=1:nnt
   time_likelihood_final[it] = toq();
   println(n," final:   ",time_compute_final[it]," ",time_likelihood_final[it])
 
-  
+
 #  time_compute[it] = toq();
 #  tic()
 #  log_like = lorentz_likelihood_hermitian_band_save(p,y,aex,al_small,indx,logdeta)

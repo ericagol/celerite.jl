@@ -2,13 +2,10 @@ using Optim
 using PyPlot
 using StatsBase
 using ForwardDiff
-include("compile_matrix_symm.jl")
-include("compute_likelihood.jl")
-include("bandec_trans.jl")
-include("banbks_trans.jl")
+using GenRP
 include("regress.jl")
 
-function test_co2()
+function test_co2_grid()
 
 function log_like_derivative_wrapper(p0,p,x,t,y)
   n = length(t)
@@ -22,8 +19,11 @@ function log_like_derivative_wrapper(p0,p,x,t,y)
 #  aex = zeros(Number,width,nex)
 #  al_small= zeros(Number,m1,nex)
 #  bex = zeros(Number,nex)
-
-  function log_like(x::Vector)
+  nx = length(x)
+  x0 = copy(x)
+  xvary=x[1:nx-1]
+  function log_like(xvary::Vector)
+    x = [xvary;x0[nx]]
     w0 = exp(x[1])
     alpha = exp(x[2:p+1])
     beta_real = exp(x[p+2:2p+1])
@@ -41,7 +41,7 @@ function log_like_derivative_wrapper(p0,p,x,t,y)
   end
 
 ## Optimize the likelihood:
-  xdiff = copy(x)
+  xdiff = copy(xvary)
 ## Now perturb x:
 #  dlogdx = zeros(eltype(x),length(x))
 #  log_like0=log_like(x)
@@ -70,13 +70,15 @@ function log_like_derivative_wrapper(p0,p,x,t,y)
 #  result = optimize(log_like, x0, BFGS())
 #  result = optimize(log_like, xdiff)
   println(result)
-  return exp(Optim.minimizer(result)),Optim.minimum(result)
+  xopt = x0
+  xopt[1:nx-1]=exp(Optim.minimizer(result))
+  return xopt,Optim.minimum(result)
 #  return result
 end
 
 # Read in CO2 data:
 
-data = readdlm("CO2_data.csv.txt",',')
+data = readdlm("data/CO2_data.csv.txt",',')
 co2 = vec(data[:,2])
 time = vec(data[:,1] - data[1,1])
 # Carry out cubic regression:
@@ -124,10 +126,10 @@ nkermax = 5
 nperiod = 200
 alpha   = [1.0]
 beta_real = [0.01]
+beta_imag = Float64[]
 period = logspace(-1,1,nperiod)
 log_like_period = zeros(nperiod)
 xbest = Float64[]
-beta_imag = Float64[]
 ibest = -1
 for nkernel=2:nkermax
   alpha = [alpha;1.0]
@@ -135,23 +137,24 @@ for nkernel=2:nkermax
   log_like_best = Inf
   for iperiod=1:nperiod
 # Now, insert into the parameter vector:
-    x0 = [log(0.1);log(alpha);log(beta_real);log(beta_imag);log(2pi/period[iperiod])]
+    x0 = [log(1.0);log(alpha);log(beta_real);log(beta_imag);log(2pi/period[iperiod])]
     nx = length(x0)
     p = nkernel-1
     p0 = 1
+# Vary all parameters except the last one (frequency):
 # x,best_log_like = log_like_derivative_wrapper(p0,p,x0,time,co2_sub)
     xopt,log_like_opt = log_like_derivative_wrapper(p0,p,x0,time,co2_sub)
     log_like_period[iperiod]=log_like_opt
     if log_like_opt < log_like_best
        log_like_best = copy(log_like_opt)
        xbest = copy(xopt)
-       ibest=iperiod
+       ibest = iperiod
     end
   end
-  beta_imag = [beta_imag;2pi/period[ibest]]
   clf()
   semilogx(period,log_like_period)
   print(ibest," ",xbest," ",log_like_best)
+  beta_imag = [beta_imag;2pi/period[ibest]]
   read(STDIN,Char)
 end
 #println(x0,x,best_log_like)
@@ -159,7 +162,7 @@ println(xbest)
 # Plot the optimized ACF:
 acf_model = xbest[2].*exp(-lags.*xbest[nkernel+2])
 for j=2:nkernel
-  acf_model += xbest[j+1]*exp(-lags.*xbest[nkernel+j+1]).*cos(lags.*xbest[2*nkernel+j]) 
+  acf_model += xbest[j+1]*exp(-lags.*xbest[nkernel+j+1]).*cos(lags.*xbest[2*nkernel+j])
 end
 #+xbest[4]*exp(-lags.*xbest[8]).*cos(lags.*xbest[11])+xbest[5]*exp(-lags.*xbest[9]).*cos(lags.*xbest[12])
 acf_model[1] += xbest[1]

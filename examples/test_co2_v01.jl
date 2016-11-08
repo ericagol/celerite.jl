@@ -2,10 +2,7 @@ using Optim
 using PyPlot
 using StatsBase
 using ForwardDiff
-include("compile_matrix_symm.jl")
-include("compute_likelihood.jl")
-include("bandec_trans.jl")
-include("banbks_trans.jl")
+using GenRP
 include("regress.jl")
 
 function test_co2_v01()
@@ -80,7 +77,7 @@ end
 
 # Read in CO2 data:
 
-data = readdlm("CO2_data.csv.txt",',')
+data = readdlm("data/CO2_data.csv.txt",',')
 co2 = vec(data[:,2])
 time = vec(data[:,1] - data[1,1])
 # Carry out quadratic regression:
@@ -176,7 +173,7 @@ for iperiod=1:nperiod
 # Plot the optimized ACF:
     acf_model = xbest[2].*exp(-lags.*xbest[nkernel+2])
     for j=2:nkernel
-      acf_model += xbest[j+1]*exp(-lags.*xbest[nkernel+j+1]).*cos(lags.*xbest[2*nkernel+j]) 
+      acf_model += xbest[j+1]*exp(-lags.*xbest[nkernel+j+1]).*cos(lags.*xbest[2*nkernel+j])
     end
     acf_model[1] += xbest[1]
     clf()
