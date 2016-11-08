@@ -1,3 +1,5 @@
+include("banbks_trans.jl")
+
 function compute_likelihood(p::Int64,p0::Int64,y::Vector,aex::Array,al_small::Array,indx::Vector{Int64},logdeta,bex::Vector)
 # Computes the likelihood of a sum of Exponential/Cosine kernels (which have a
 # Lorentzian power spectrum) utilizing the approach of Ambikasaran (2015)
@@ -15,13 +17,11 @@ function compute_likelihood(p::Int64,p0::Int64,y::Vector,aex::Array,al_small::Ar
 # First, define band-diagonal matrix for kernel:
 # [x_i,{r_{i,1},...,r_{i,p}},{l_{i,1},...,l_{i,p}}]
 
-#tic()
 n = length(y)
 nex = (n-1)*(4(p-p0)+2p0+1)+1
 
 # There are 2(p+1) sub-diagonals, 2(p+1) super-diagonals + diagonal
 # for a total of 4*p+5 non-zero diagonals:
-#bex = zeros(eltype(aex),nex)
 czero = zero(eltype(aex))
 for i=1:n
 # Compute actual indices:
@@ -45,7 +45,6 @@ end
 m2 = m1
 # Solve the equation A^{-1} y = b using band-diagonal LU back-substitution on
 # the extended equations: A_{ex}^{-1} y_{ex} = b_{ex}:
-#@code_warntype banbks(aex,nex,m1,m2,al_small,indx,bex)
 banbks_trans(aex,nex,m1,m2,al_small,indx,bex)
 # Now select solution to compute the log likelihood:
 # The equation A^{-1} y = b has been solved in bex (the extended vector).
@@ -58,6 +57,5 @@ for i=1:n
 end
 # Convert this to log likelihood:
 log_like = -0.5*(log_like+logdeta+n*log(2pi))
-#log_like = -0.5*log_like
 return log_like
 end

@@ -1,6 +1,5 @@
-# This is the real version of the calculation based on 8/18/16 notes.
+include("bandec_trans.jl")
 
-#function compile_matrix_symm(alpha,beta_real,beta_imag,w,t,y)
 function compile_matrix_symm(alpha::Vector,beta_real::Vector,beta_imag::Vector, w ,t::Vector,
        nex::Int64,aex::Array,al_small::Array,indx::Vector{Int64})
 
@@ -21,19 +20,17 @@ for i=1:p
     p0 += 1
   end
 end
-#nex = (n-1)*(4(p-p0)+2p0+1)+1
+# nex = (n-1)*(4(p-p0)+2p0+1)+1
 m1 = p0+2(p-p0+1)
 if p == p0
   m1 = p0+1
-end  
+end
 width = 2m1+1
 @assert(size(aex)==(width,nex))
 @assert(size(al_small)==(m1,nex))
 @assert(length(indx)==nex)
 @assert(length(beta_real)==p)
 @assert(length(beta_imag)==p)
-
-#aex = zeros(eltype(alpha),width,nex)
 
 # Do the first row, eqn (61), which is a special case since l_1 = 0:
 irow = 1
@@ -233,31 +230,17 @@ for k=2:n
 end
 # Specify the number of bands below & above the diagonal:
 m2 = m1
-# Set up matrix & vector needed for band-diagonal solver:
-#al_small = zeros(eltype(alpha),m1,nex)
-#indx = collect(1:nex)
 # Do the band-diagonal LU decomposition (indx is a permutation vector for
-# pivoting; d gives the sign of the determinant based on the number of pivots):
+# pivoting - d gives the sign of the determinant based on the number of pivots):
 d=bandec_trans(aex,nex,m1,m2,al_small,indx)
-# Solve the equation A^{-1} y = b using band-diagonal LU back-substitution on
-# the extended equations: A_{ex}^{-1} y_{ex} = b_{ex}:
-#banbks_trans(aex,nex,m1,m2,al_small,indx,bex)
 # Now select solution to compute the log likelihood:
 # The equation A^{-1} y = b has been solved in bex (the extended vector).
 # So, I need to pick out the b portion from bex, and take the dot product
 # with y (which is the residuals of the data minus model, which is correlated
 # noise that we are modeling with the multi-Lorentzian covariance function):
-#log_like = 0.0
-#logdetofa = czero
 logdetofa = n*log(2.0)
 for i=1:nex
   logdetofa += log(abs(aex[1,i]))
-#  println(i," ",aex[1,i])
 end
-#for i=1:n
-#  i0 = (i-1)*(4(p-p0)+2p0+1)+1
-#  logdetofa += log(abs(aex[1,i0]))
-#  println(i," ",i0," ",aex[1,i0])
-#end
 return logdetofa
 end
