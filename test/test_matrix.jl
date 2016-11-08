@@ -33,8 +33,8 @@ x2 = \(A,corrnoise)
 
 # Take dot product with correlated noise, and compare with original noise realization:
 @test_approx_eq dot(y,y) dot(corrnoise,x2)
-# println("Dot product of white noise:                          ",dot(y,y))
-# println("Dot product of correlated noise with inverse kernel: ",dot(corrnoise,x2))
+println("Dot product of white noise:                          ",dot(y,y))
+println("Dot product of correlated noise with inverse kernel: ",dot(corrnoise,x2))
 
 # Now use Ambikarasan O(N) method:
 y = corrnoise
@@ -72,5 +72,5 @@ log_like3 += -0.5*logdet(A) - 0.5*n*log(2*pi)
 
 @test_approx_eq logdeta_final logdet(A)
 @test_approx_eq log_like_final log_like3
-# println("Log Determinant: ",logdeta_final," ",logdet(A))
-# println("Log Likelihood:  ",log_like_final," ",log_like3)
+println("Log Determinant: ",logdeta_final," ",logdet(A))
+println("Log Likelihood:  ",log_like_final," ",log_like3)
