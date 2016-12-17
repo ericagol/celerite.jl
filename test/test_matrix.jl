@@ -2,12 +2,13 @@ using Base.Test
 using GenRP
 
 omega = 2pi/12.203317
-alpha = [1.0428542, -0.38361831, 0.30345984/2, 0.30345984/2]
+alpha_r = [1.0428542, 0.38361831, 0.30345984/2, 0.30345984/2]
+alpha_i = [0. ,               0. , 0.1, 0.1]
 beta = [complex(0.1229159,0.0),complex(0.48922908,0.0),complex(0.09086397,omega),complex(0.09086397,-omega)]
 nt = 512
 t = collect(linspace(0,nt-1,nt))
 acf = zeros(nt)
-p = length(alpha)
+p = length(alpha_r)
 
 # First solve in traditional manner:
 w = 0.03027 * ones(nt)
@@ -16,7 +17,8 @@ for i=1:nt
   A[i,i] += w[i]
   for j=1:nt
     for k=1:p
-      A[i,j] += alpha[k] * exp(-real(beta[k])*abs(t[j]-t[i]))*cos(imag(beta[k])*(t[j]-t[i]))
+      A[i,j] += alpha_r[k] * exp(-real(beta[k])*abs(t[j]-t[i]))*cos(imag(beta[k])*(t[j]-t[i]))
+      A[i,j] += alpha_i[k] * exp(-real(beta[k])*abs(t[j]-t[i]))*sin(abs(imag(beta[k])*(t[j]-t[i])))
     end
   end
 end
@@ -39,7 +41,8 @@ println("Dot product of correlated noise with inverse kernel: ",dot(corrnoise,x2
 # Now use Ambikarasan O(N) method:
 y = corrnoise
 n = nt
-alpha_final = [1.0428542, -0.38361831, 0.30345984]
+alpha_final = [1.0428542, 0.38361831, 0.30345984]
+alpha_imag =  [0. ,  0. ,  0.2]
 beta_real_final = [0.1229159,0.48922908,0.09086397]
 beta_imag_final = [0.0,0.0,omega]
 w0 = 0.03027
@@ -55,7 +58,7 @@ aex_final = zeros(Float64,width_final,nex_final)
 al_small_final = zeros(Float64,m1_final,nex_final)
 indx_final= collect(1:nex_final)
 tic()
-logdeta_final = compile_matrix_symm(alpha_final,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
+logdeta_final = compile_matrix_symm(alpha_final,alpha_imag,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
 tic()
 bex = zeros(Float64,nex_final)
 log_like_final = compute_likelihood(p_final,p0_final,y,aex_final,al_small_final,indx_final,logdeta_final,bex)

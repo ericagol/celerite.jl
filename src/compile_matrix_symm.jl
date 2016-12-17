@@ -1,6 +1,6 @@
 include("bandec_trans.jl")
 
-function compile_matrix_symm(alpha::Vector,beta_real::Vector,beta_imag::Vector, w ,t::Vector,
+function compile_matrix_symm(alpha_real::Vector,alpha_imag::Vector,beta_real::Vector,beta_imag::Vector, w ,t::Vector,
        nex::Int64,aex::Array,al_small::Array,indx::Vector{Int64})
 
 # The vectors are arranged as:
@@ -12,8 +12,8 @@ function compile_matrix_symm(alpha::Vector,beta_real::Vector,beta_imag::Vector, 
 # 3). Equation 59 (real & imagingary; i=1..p).
 
 n = length(t)
-p = length(alpha)
-czero = zero(eltype(alpha))
+p = length(alpha_real)
+czero = zero(eltype(alpha_real))
 p0 = 0
 for i=1:p
   if beta_imag[i] == czero
@@ -35,14 +35,14 @@ width = 2m1+1
 # Do the first row, eqn (61), which is a special case since l_1 = 0:
 irow = 1
 k = 1
-d = sum(alpha)+w
+d = sum(alpha_real)+w
 jcol0 = 1
 # Factor multiplying x_1:
 jcol = jcol0-irow + m1+1
 aex[jcol,irow] = d/2.0
-one_type = one(eltype(alpha))
-gamma_real = zeros(eltype(alpha),p)
-gamma_imag = zeros(eltype(alpha),p)
+one_type = one(eltype(alpha_real))
+gamma_real = zeros(eltype(alpha_real),p)
+gamma_imag = zeros(eltype(alpha_real),p)
 ebt = czero
 phi = czero
 for j=1:p0
@@ -105,7 +105,7 @@ for k=2:n
 # Factor multiplying x_k:
     jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1
     jcol = jcol0-irow + m1+1
-    aex[jcol,irow] = 0.5*alpha[j]
+    aex[jcol,irow] = alpha_real[j]/2.0
 # Factor multiplying r^R_{k+1,j}:
     if k < n
       jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1 + j
@@ -161,7 +161,7 @@ for k=2:n
 # Factor multiplying x_k:
     jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1
     jcol = jcol0-irow + m1+1
-    aex[jcol,irow] = 0.5*alpha[j]
+    aex[jcol,irow] = alpha_real[j]/2.0
 # Factor multiplying r^R_{k+1,j}:
     if k < n
       jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1 + p0 + (j-p0-1)*2 + 1
@@ -178,6 +178,10 @@ for k=2:n
     jcol0 = (k-2)*(4(p-p0)+2p0+1) + 1 + p0 + (j-p0-1)*2 + 2
     jcol = jcol0-irow + m1+1
     aex[jcol,irow] =  one_type
+# Factor multiplying x_k:
+    jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1
+    jcol = jcol0-irow + m1+1
+    aex[jcol,irow] = alpha_imag[j]/2.0
 # Factor multiplying r^R_{k+1,j}:
     if k < n
       jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1 + p0 + (j-p0-1)*2 + 1
@@ -199,7 +203,7 @@ for k=2:n
 # Factor multiplying l^R_{k,j}:
     jcol0 = (k-2)*(4(p-p0)+2p0+1) + 1 + 2p-p0 + j
     jcol = jcol0-irow + m1+1
-    aex[jcol,irow] =  alpha[j]/2.0
+    aex[jcol,irow] =  alpha_real[j]/2.0
     if k < n
 # Factor multiplying r^R_{k+1,j}:
       jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1 + j
@@ -211,7 +215,11 @@ for k=2:n
 # Factor multiplying l^R_{k,j}:
     jcol0 = (k-2)*(4(p-p0)+2p0+1) + 1 + 2p-p0 + p0+ (j-p0-1)*2 + 1
     jcol = jcol0-irow + m1+1
-    aex[jcol,irow] =  alpha[j]/2.0
+    aex[jcol,irow] =  alpha_real[j]/2.0
+# Factor multiplying l^I_{k,j}:
+    jcol0 = (k-2)*(4(p-p0)+2p0+1) + 1 + 2p-p0 + p0+ (j-p0-1)*2 + 2
+    jcol = jcol0-irow + m1+1
+    aex[jcol,irow] =  alpha_imag[j]/2.0
     if k < n
 # Factor multiplying r^R_{k+1,j}:
       jcol0 = (k-1)*(4(p-p0)+2p0+1) + 1 + p0 + (j-p0-1)*2 + 1
