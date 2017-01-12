@@ -1,4 +1,4 @@
-function simulate_exp_gp(t,alpha,beta,ndev)
+function simulate_exp_gpreal(t,alpha,beta,ndev)
 #
 # Function for simulating a GP based upon an exponential correlation
 # matrix using an analytic form for the Cholesky decomposition and
@@ -20,9 +20,7 @@ data[nt] = sqrt(alpha)*ndev[nt]
 gamma = zero(eltype(beta))
 for i=nt-1:-1:1
   gamma = exp(-beta*(t[i+1]-t[i]))
-#  if i == 1
-#     println(i," ",abs(sqrt(1.0-gamma^2))," ",abs(gamma))
-#  end
+#  println(i," ",abs(sqrt(1.0-gamma^2)))
   data[i] = sqrt(1.0-gamma^2)*sqrt(alpha)*ndev[i]+gamma*data[i+1]
 end
 return data
