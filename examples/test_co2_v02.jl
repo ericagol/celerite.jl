@@ -2,7 +2,7 @@ using Optim
 using PyPlot
 using StatsBase
 using ForwardDiff
-using GenRP
+using celerite 
 include("regress.jl")
 
 function test_co2_v02()

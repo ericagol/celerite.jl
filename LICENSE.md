@@ -1,4 +1,4 @@
-The GenRP.jl package is licensed under the MIT "Expat" License:
+The celerite.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2016: Daniel Foreman-Mackey & Eric Agol
 >

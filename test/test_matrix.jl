@@ -1,5 +1,5 @@
 using Base.Test
-using GenRP
+using celerite
 
 omega = 2pi/12.203317
 alpha_r = [1.0428542, 0.38361831, 0.30345984/2, 0.30345984/2]

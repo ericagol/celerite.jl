@@ -1,4 +1,4 @@
-module GenRP
+module celerite
 
 export compile_matrix_symm, compute_likelihood
 
