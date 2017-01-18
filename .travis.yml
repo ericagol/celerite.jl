@@ -13,7 +13,7 @@ notifications:
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone(pwd()); Pkg.build("GenRP"); Pkg.test("GenRP"; coverage=true)'
+  - julia -e 'Pkg.clone(pwd()); Pkg.build("celerite"); Pkg.test("celerite"; coverage=true)'
 
 # after_success:
 #   # push coverage results to Coveralls
