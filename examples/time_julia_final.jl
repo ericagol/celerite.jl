@@ -8,6 +8,7 @@ using celerite
 function time_julia_final()
 omega = 2pi/12.203317
 alpha_final = [1.0428542, 0.30345984]
+alpha_imag = [0.0, 0.1]
 beta_real_final = [0.1229159,0.09086397]
 beta_imag_final = [0.0,omega]
 #beta_imag_final = [0.0,0.0]
@@ -56,13 +57,19 @@ for it=1:nnt
   al_small_final = zeros(Float64,m1_final,nex_final)
   indx_final= collect(1:nex_final)
   tic()
+  logdeta_final=0.0
 #  @code_warntype   compile_matrix_symm(alpha_final,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
-  logdeta_final= compile_matrix_symm(alpha_final,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
+  for irep=1:10
+    logdeta_final= compile_matrix_symm(alpha_final,alpha_imag,beta_real_final,beta_imag_final,w0,t,nex_final,aex_final,al_small_final,indx_final)
+  end
   time_compute_final[it] = toq();
   tic()
   bex = zeros(Float64,nex_final)
+  log_like_final = 0.0
 #  @code_warntype compute_likelihood(p_final,y,aex_final,al_small_final,indx_final,logdeta_final,bex)
-  log_like_final= compute_likelihood(p_final,p0_final,y,aex_final,al_small_final,indx_final,logdeta_final,bex)
+  for irep=1:10
+    log_like_final= compute_likelihood(p_final,p0_final,y,aex_final,al_small_final,indx_final,logdeta_final,bex)
+  end
   time_likelihood_final[it] = toq();
   println(n," final:   ",time_compute_final[it]," ",time_likelihood_final[it])
 
@@ -75,5 +82,5 @@ for it=1:nnt
 #  println("Eigenvalues: ",eigval_aex)
 #  read(STDIN,Char)
 end
-return
+return nt,time_compute_final,time_likelihood_final
 end

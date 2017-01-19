@@ -6,7 +6,8 @@ alpha_r = [1.0428542, 0.38361831, 0.30345984/2, 0.30345984/2]
 alpha_i = [0. ,               0. , 0.1, 0.1]
 beta = [complex(0.1229159,0.0),complex(0.48922908,0.0),complex(0.09086397,omega),complex(0.09086397,-omega)]
 nt = 512
-t = collect(linspace(0,nt-1,nt))
+#t = collect(linspace(0,nt-1,nt))
+t = sort!(rand(nt))
 acf = zeros(nt)
 p = length(alpha_r)
 
