@@ -36,6 +36,7 @@ for i=1:width
     aex[i,j]=czero
   end
 end
+println("aex set to zero")
 # Do the first row, eqn (61), which is a special case since l_1 = 0:
 irow = 1
 k = 1
