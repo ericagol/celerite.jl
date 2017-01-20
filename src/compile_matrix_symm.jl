@@ -31,7 +31,11 @@ width = 2m1+1
 @assert(length(indx)==nex)
 @assert(length(beta_real)==p)
 @assert(length(beta_imag)==p)
-
+for i=1:width
+  for j=1:nex
+    aex[i,j]=czero
+  end
+end
 # Do the first row, eqn (61), which is a special case since l_1 = 0:
 irow = 1
 k = 1
