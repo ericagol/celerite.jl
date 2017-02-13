@@ -27,7 +27,11 @@ aonr = sqrt(b^2+((1.+k)^2-b^2)/sin(pi*tdur/period)^2)
 #println("P: ",period)
 arg = sqrt((1.+k)^2-b^2)/sin(pi*tdur/period)/aonr
 #println("arg: ",arg)
-inc = 180./pi*asin(arg)
+if abs(arg) <= 1
+  inc = 180./pi*asin(arg)
+else
+  inc = 90.
+end
 #print("Inc: ",inc)
 x[2] = inc
 

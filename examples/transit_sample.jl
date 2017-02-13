@@ -19,7 +19,9 @@ using FITSIO
 #import matplotlib.pyplot as plt
 #from scipy.optimize import minimize
 
-using celerite
+#using celerite
+include("../src/compile_matrix_symm.jl")
+include("../src/compute_likelihood.jl")
 using PyPlot
 #from plot_setup import setup, get_figsize
 #from transit_model import RotationTerm, TransitModel
@@ -66,7 +68,7 @@ end
 # The final number of data points we have is count:
 # Shift the zero-point of time to be the middle of the dataset:
 t -= 0.5*(minimum(t)+maximum(t))
-
+println("Time range: ",minimum(t)," ",maximum(t))
 hdr = read_header(fits_data[2]);
 
 #data, hdr = fitsio.read("data/kplr001430163-2013011073258_llc.fits",
@@ -103,7 +105,6 @@ true_model = transit_model_sampled(t,true_params)
 #print("Depth [ppt]: ",depth*1e3)
 plot(t,true_model)
 println("Called transit model")
-read(STDIN,Char)
 # Build the true model
 #true_model = TransitModel(
 #    texp,
@@ -121,12 +122,13 @@ read(STDIN,Char)
 # Inject the transit into the data
 true_transit = 1e-3*true_model + 1.0
 y = y.*true_transit
-
+println("Range of y: ",minimum(y)," ",maximum(y))
 # Normalize the data
 med = median(y)
 y = (y./ med - 1.0).* 1e3
 yerr *= 1e3 / med
 
+read(STDIN,Char)
 # Set up the GP model
 #mean = TransitModel(
 #    texp,
@@ -149,11 +151,12 @@ yerr *= 1e3 / med
 #)
 var = std(y)^2
 pname = ["mean flux","log(period [d])","log(R_p/R_*)","log(T [d])","t_0 [d]","b","q1","q2","log(sig^2)","log(amplitude)","log(tau)","log(Pstar)","log(f)"]
-gpp = [2.*log(var*0.5),log(var),log(0.5*maximum(t)),log(4.5),0.0]
+gpp = [2.*log(minimum(yerr)*0.5),log(var),log(0.5*maximum(t)),log(4.5),0.0]
 #minp = [-0.5,log(7.9),log(.005),log(0.4),-.1,0,  1e-5,  1e-5, log(var*0.01), log(var*0.01), log(dtmax)                ,  -8.0   ]
 #maxp = [ 0.5, log(8.1), log(.100), log(0.6), .1, 1.0, 1-1e-5, 1-1e-5, log(var*100.), log(var*100.), log(maximum(t)-minimum(t)), log(5.0)]
-lower = [-0.5, log(7.9), log(.005), log(0.4),-.1, 0.0,   1e-5,   1e-5, log(var*0.01), log(var*0.01), log(dtmax)                ,               3.0*log(texp),   -8.0  ]
-upper = [ 0.5, log(8.1), log(.100), log(0.6), .1, 1.0, 1-1e-5, 1-1e-5, log(var*100.), log(var*100.), log(maximum(t)-minimum(t)), 0.5*(maximum(t)-minimum(t)), log(5.0)]
+lower = [-0.5, log(7.9), log(.005), log(0.4),-.1, 0.0,   1e-5,   1e-5, -12.0, log(var*0.01), log(dtmax)                ,               3.0*log(texp),   -8.0  ]
+upper = [ 0.5, log(8.1), log(.100), log(0.6), .1, 1.0, 1-1e-5, 1-1e-5,   2.0, log(var*100.), log(maximum(t)-minimum(t)), 0.5*(maximum(t)-minimum(t)), log(5.0)]
+sigma = [1e-4, 1e-4, 1e-3, 1e-3, 1e-3, 0.1, 0.1, 0.1, 0.01, 0.01, 0.1, 0.1, 0.1]
 
 # To do:
 # 1).  Add in bounds on parameters. [x]
@@ -176,6 +179,9 @@ indx = collect(1:nex)
 bex = zeros(nex)
 
 param = [true_params;gpp]
+println("Initial parameters: ",param)
+println("Lower bounds:  ",lower)
+println("Upper bounds:  ",upper)
 
 function neg_log_like(param)
 # Transiting planet parameters:
@@ -191,30 +197,42 @@ beta_imag = zeros(p)
 # Convert from Rotation kernel parameters to celerite kernel parameters:
 f = exp(gpp[5])
 # Define alpha_real, alpha_imag, beta_real, beta_imag
-alpha_real[1] = exp(gpp[2])/(2.+f)
 alpha_real[1] = exp(gpp[2])*(1.+f)/(2.+f)
+alpha_real[2] = exp(gpp[2])/(2.+f)
 beta_real[1] = exp(-gpp[3])
 beta_real[2] = exp(-gpp[3])
 beta_imag[2] = 2pi*exp(-gpp[4])
 # White noise component:
-w0 = exp(gpp[1])
+#w0 = zeros(N)+exp(gpp[1])
+w0 = yerr.^2+exp(gpp[1])
 # Compute the banded extended matrix:
 logdeta = compile_matrix_symm(alpha_real,alpha_imag,beta_real,beta_imag,w0,t,nex,aex,al_small,indx)
 # Subtract the mean before computing the likelihood:
+#println("y range: ",minimum(y)," ",maximum(y))
+#println("tr mod : ",minimum(trans_model)," ",maximum(trans_model))
 resid = y-trans_model
 # Use banded LU decomposition to compute the log likelihood:
+#println("aex range: ",minimum(aex)," ",maximum(aex))
+#println("al range: ",minimum(al_small)," ",maximum(al_small))
+#println("indx range: ",minimum(indx)," ",maximum(indx))
+for i=1:nex
+  bex[i]=0.0
+end
 log_like = compute_likelihood(p,p0,resid,aex,al_small,indx,logdeta,bex)
-println(param)
-println("-log(like): ",-log_like)
+#println("log det a: ",logdeta)
+#println("bex range: ",minimum(bex)," ",maximum(bex))
+#println(param)
+#println("-log(like): ",-log_like)
 return -log_like
 end
 
 # Optimize the likelihood:
 tic()
+println("Initial log-likelihood: ",neg_log_like(param))
 println("Optimizing log likelihood")
 xdiff = param
-#result = optimize(DifferentiableFunction(neg_log_like), xdiff, lower, upper, Fminbox(), optimizer=LBFGS, optimizer_o= Optim.Options(autodiff = true))
-result = optimize(DifferentiableFunction(neg_log_like), xdiff, lower, upper, Fminbox())
+result = optimize(DifferentiableFunction(neg_log_like), xdiff, lower, upper, Fminbox(), optimizer=LBFGS, optimizer_o= Optim.Options(autodiff = true))
+#result = optimize(DifferentiableFunction(neg_log_like), xdiff, lower, upper, Fminbox())
 #result = optimize(neg_log_like, xdiff)
 
 
@@ -238,11 +256,18 @@ toq()
 
 param = Optim.minimizer(result)
 
-#print("Initial log-likelihood: ",Optim.minimum(result))
-print("Initial log-likelihood: ",neg_log_like(param))
+#println("Initial log-likelihood: ",Optim.minimum(result))
+println("Initial log-likelihood: ",neg_log_like(param))
+#println("Initial log-likelihood: ",neg_log_like(param))
 #println(Optim.minimizer(result))
 
 read(STDIN,Char)
+
+# Now, run a markov chain:
+
+include("aff_inv_mcmc.jl")
+
+
 
 # Define the model
 def neg_log_like(params, y, gp):
