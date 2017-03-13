@@ -1,6 +1,7 @@
 Trying out solver from here:
 
 http://sep.stanford.edu/data/media/public/oldreports/sep20/20_11.pdf
+(I saved it as Gaussian_elimination_banded.pdf)
 
 Problem is that there are a lot of 'goto' statements...
 

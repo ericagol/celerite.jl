@@ -97,6 +97,6 @@ loglog(nj,time_compute_final+time_likelihood_final,label="Compute time")
 loglog(nj,(time_compute_final[8]+time_likelihood_final[8]).*(nj./nj[8]).^3,label="Compute time")
 xlabel("J")
 ylabel("Time [sec]")
-legen(loc="upper left")
+legend(loc="upper left")
 return nt,time_compute_final,time_likelihood_final
 end
