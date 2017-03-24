@@ -63,7 +63,7 @@ function get_parameter_vector(term::Term)
     return Array(Float64, 0)
 end
 
-function set_parameter_vector(term::Term, vector::Array)
+function set_parameter_vector!(term::Term, vector::Array)
 end
 
 # A sum of terms
@@ -106,11 +106,11 @@ function get_parameter_vector(term_sum::TermSum)
     return cat(1, map(get_parameter_vector, term_sum.terms)...)
 end
 
-function set_parameter_vector(term_sum::TermSum, vector::Array)
+function set_parameter_vector!(term_sum::TermSum, vector::Array)
     index::Int64 = 1
     for term in term_sum.terms
         len = length(term)
-        set_parameter_vector(term, vector[index:index+len-1])
+        set_parameter_vector!(term, vector[index:index+len-1])
         index = index + len
     end
 end
@@ -188,10 +188,10 @@ function get_parameter_vector(term_prod::TermProduct)
     return cat(1, get_parameter_vector(term_prod.term1), get_parameter_vector(term_prod.term2))
 end
 
-function set_parameter_vector(term_prod::TermProduct, vector::Array)
+function set_parameter_vector!(term_prod::TermProduct, vector::Array)
     l = length(term_prod.term1)
-    set_parameter_vector(term_prod.term1, vector[1:l])
-    set_parameter_vector(term_prod.term2, vector[l+1:end])
+    set_parameter_vector!(term_prod.term1, vector[1:l])
+    set_parameter_vector!(term_prod.term2, vector[l+1:end])
 end
 
 # A real term where b=0 and d=0
@@ -212,7 +212,7 @@ function get_parameter_vector(term::RealTerm)
     return [term.log_a, term.log_c]
 end
 
-function set_parameter_vector(term::RealTerm, vector::Array)
+function set_parameter_vector!(term::RealTerm, vector::Array)
     term.log_a = vector[1]
     term.log_c = vector[2]
 end
@@ -237,7 +237,7 @@ function get_parameter_vector(term::ComplexTerm)
     return [term.log_a, term.log_b, term.log_c, term.log_d]
 end
 
-function set_parameter_vector(term::ComplexTerm, vector::Array)
+function set_parameter_vector!(term::ComplexTerm, vector::Array)
     term.log_a = vector[1]
     term.log_b = vector[2]
     term.log_c = vector[3]
@@ -289,7 +289,7 @@ function get_parameter_vector(term::SHOTerm)
     return [term.log_S0, term.log_Q, term.log_omega0]
 end
 
-function set_parameter_vector(term::SHOTerm, vector::Array)
+function set_parameter_vector!(term::SHOTerm, vector::Array)
     term.log_S0 = vector[1]
     term.log_Q = vector[2]
     term.log_omega0 = vector[3]
