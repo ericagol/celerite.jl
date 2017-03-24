@@ -8,6 +8,7 @@ type Celerite
     a::Array{Float64}
     al::Array{Float64}
     ipiv::Array{Int64}
+    x::Array{Float64}
     logdet::Float64
     n::Int64
     width::Int64
@@ -190,7 +191,7 @@ function compute(gp::Celerite, x, yerr=0.0)
     gp.width, gp.dim_ext, gp.block_size, gp.a = build_extended_system(coeffs..., convert(Vector{Float64}, x), gp.a, offset_factor)
 
     # Add the yerr
-    var = yerr^2 + zeros(Float64, length(x))
+    var = yerr.^2 + zeros(Float64, length(x))
     offset = offset_factor * gp.width + 1
     for k in 1:length(var)
         j = (k-1)*gp.block_size+1
@@ -211,6 +212,7 @@ function compute(gp::Celerite, x, yerr=0.0)
         gp.logdet += log(abs(gp.a[1, i]))
     end
 
+    gp.x = x
     gp.computed = true
     return gp.logdet
 end
@@ -224,11 +226,12 @@ function apply_inverse(gp::Celerite, y)
     end
 
     m = gp.width
-    bex = zeros(Float64, gp.dim_ext)
+    bex = Array(Float64, gp.dim_ext)
 
     # Loop over columns
     result = Array(Float64, size(y)...)
     for k in 1:size(y, 2)
+        fill!(bex, 0.0)
         for i in 1:gp.n
             bex[(i-1)*gp.block_size+1] = y[i, k]
         end
@@ -250,4 +253,26 @@ function log_likelihood(gp::Celerite, y)
         nll = nll + alpha[i] * y[i]
     end
     return -0.5 * nll
+end
+
+function predict(gp::Celerite, y, t; return_cov=true, return_var=false)
+    alpha = apply_inverse(gp, y)
+    tau = broadcast(-, reshape(t, length(t), 1), reshape(gp.x, 1, length(gp.x)))
+    Kxs = get_value(gp.kernel, tau)
+    mu = Kxs * alpha
+    if !return_cov && !return_var
+        return mu
+    end
+
+    KxsT = transpose(Kxs)
+    if return_var
+        v = -sum(KxsT .* apply_inverse(gp, KxsT), 1)
+        v = v + get_value(gp.kernel, [0.0])[1]
+        return mu, v[1, :]
+    end
+
+    tau = broadcast(-, reshape(t, length(t), 1), reshape(t, 1, length(t)))
+    cov = get_value(gp.kernel, tau)
+    cov = cov - Kxs * apply_inverse(gp, KxsT)
+    return mu, cov
 end

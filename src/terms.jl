@@ -21,6 +21,40 @@ function get_all_coefficients(term::Term)
     return (rc[1], rc[2], cc[1], cc[2], cc[3], cc[4])
 end
 
+function get_value(term::Term, tau)
+    coeffs = get_all_coefficients(term)
+    t = abs(tau)
+    k = zeros(tau)
+    for i in 1:length(coeffs[1])
+        k = k + coeffs[1][i] .* exp(-coeffs[2][i] .* t)
+    end
+    for i in 1:length(coeffs[3])
+        k = k + (coeffs[3][i].*cos(coeffs[6][i].*t) + coeffs[4][i].*sin(coeffs[6][i].*t)) .* exp(-coeffs[5][i].*t)
+    end
+    return k
+end
+
+function get_psd(term::Term, omega)
+    coeffs = get_all_coefficients(term)
+    w2 = omega.^2
+    w4 = w2.^2
+    p = zeros(w2)
+    for i in 1:length(coeffs[1])
+        a = coeffs[1][i]
+        c = coeffs[2][i]
+        p = p + a*c ./ (c*c + w2)
+    end
+    for i in 1:length(coeffs[3])
+        a = coeffs[3][i]
+        b = coeffs[4][i]
+        c = coeffs[5][i]
+        d = coeffs[6][i]
+        w02 = c*c+d*d
+        p = p + ((a*c+b*d)*w02+(a*c-b*d).*w2) ./ (w4 + 2.0*(c*c-d*d).*w2+w02*w02)
+    end
+    return sqrt(2.0 / pi) .* p
+end
+
 function length(term::Term)
     return 0
 end
