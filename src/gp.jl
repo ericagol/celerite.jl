@@ -1,3 +1,6 @@
+import Base.LAPACK.gbtrf!
+import Base.LAPACK.gbtrs!
+
 include("terms.jl")
 include("bandec_trans.jl")
 include("banbks_trans.jl")
@@ -5,6 +8,7 @@ include("banbks_trans.jl")
 type Celerite
     kernel::Term
     computed::Bool
+    use_lapack::Bool
     a::Array{Float64}
     al::Array{Float64}
     ipiv::Array{Int64}
@@ -15,7 +19,7 @@ type Celerite
     dim_ext::Int64
     block_size::Int64
 
-    Celerite(kernel) = new(kernel, false, [], [], [])
+    Celerite(kernel; use_lapack=false) = new(kernel, false, use_lapack, [], [], [])
 end
 
 function build_extended_system(alpha_real::Vector, beta_real::Vector,
@@ -185,8 +189,12 @@ function build_extended_system(alpha_real::Vector, beta_real::Vector,
 end
 
 function compute!(gp::Celerite, x, yerr=0.0)
-    gp.n = length(x)
     offset_factor = 1
+    if gp.use_lapack
+        offset_factor = 2
+    end
+
+    gp.n = length(x)
     coeffs = get_all_coefficients(gp.kernel)
     gp.width, gp.dim_ext, gp.block_size, gp.a = build_extended_system(coeffs..., convert(Vector{Float64}, x), gp.a, offset_factor)
 
@@ -198,18 +206,26 @@ function compute!(gp::Celerite, x, yerr=0.0)
         gp.a[offset, j] = gp.a[offset, j] + var[k]
     end
 
-    # Resize the work arrays if needed
-    if size(gp.al) != (gp.width, gp.dim_ext)
-        gp.al = Array(Float64, gp.width, gp.dim_ext)
-    end
-    if length(gp.ipiv) != gp.dim_ext
-        gp.ipiv = Array(Int64, gp.dim_ext)
-    end
+    if gp.use_lapack
+        gp.a, gp.ipiv = gbtrf!(gp.width, gp.width, gp.dim_ext, gp.a)
+        gp.logdet = 0.0
+        for i in 1:gp.dim_ext
+            gp.logdet += log(abs(gp.a[1+2*gp.width, i]))
+        end
+    else
+        # Resize the work arrays if needed
+        if size(gp.al) != (gp.width, gp.dim_ext)
+            gp.al = Array(Float64, gp.width, gp.dim_ext)
+        end
+        if length(gp.ipiv) != gp.dim_ext
+            gp.ipiv = Array(Int64, gp.dim_ext)
+        end
 
-    bandec_trans(gp.a, gp.dim_ext, gp.width, gp.width, gp.al, gp.ipiv)
-    gp.logdet = 0.0
-    for i in 1:gp.dim_ext
-        gp.logdet += log(abs(gp.a[1, i]))
+        bandec_trans(gp.a, gp.dim_ext, gp.width, gp.width, gp.al, gp.ipiv)
+        gp.logdet = 0.0
+        for i in 1:gp.dim_ext
+            gp.logdet += log(abs(gp.a[1, i]))
+        end
     end
 
     gp.x = x
@@ -226,18 +242,33 @@ function apply_inverse(gp::Celerite, y)
     end
 
     m = gp.width
-    bex = Array(Float64, gp.dim_ext)
 
-    # Loop over columns
     result = Array(Float64, size(y)...)
-    for k in 1:size(y, 2)
-        fill!(bex, 0.0)
-        for i in 1:gp.n
-            bex[(i-1)*gp.block_size+1] = y[i, k]
+    if gp.use_lapack
+        bex = zeros(Float64, gp.dim_ext, size(y, 2))
+        for k in 1:size(y, 2)
+            for i in 1:gp.n
+                bex[(i-1)*gp.block_size+1, k] = y[i, k]
+            end
         end
-        banbks_trans(gp.a, gp.dim_ext, m, m, gp.al, gp.ipiv, bex)
-        for i in 1:gp.n
-            result[i, k] = bex[(i-1)*gp.block_size+1]
+        gbtrs!('N', m, m, gp.dim_ext, gp.a, gp.ipiv, bex)
+        for k in 1:size(y, 2)
+            for i in 1:gp.n
+                result[i, k] = bex[(i-1)*gp.block_size+1, k]
+            end
+        end
+    else
+        # Loop over columns
+        bex = Array(Float64, gp.dim_ext)
+        for k in 1:size(y, 2)
+            fill!(bex, 0.0)
+            for i in 1:gp.n
+                bex[(i-1)*gp.block_size+1] = y[i, k]
+            end
+            banbks_trans(gp.a, gp.dim_ext, m, m, gp.al, gp.ipiv, bex)
+            for i in 1:gp.n
+                result[i, k] = bex[(i-1)*gp.block_size+1]
+            end
         end
     end
     return result

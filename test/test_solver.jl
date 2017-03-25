@@ -1,7 +1,7 @@
 using Base.Test
 import celerite
 
-function test_solver()
+function test_solver(use_lapack)
     srand(42)
     N = 100
     x = sort(10*rand(N))
@@ -9,7 +9,7 @@ function test_solver()
     yerr = 0.01 + 0.01*rand(N)
 
     kernel = celerite.RealTerm(0.5, 1.0) + celerite.SHOTerm(0.1, 2.0, -0.5)
-    gp = celerite.Celerite(kernel)
+    gp = celerite.Celerite(kernel, use_lapack=use_lapack)
 
     K = celerite.get_matrix(gp, x)
     for n in 1:N
@@ -26,4 +26,5 @@ function test_solver()
     @test isapprox(ll, ll0)
 end
 
-test_solver()
+test_solver(false)
+test_solver(true)
