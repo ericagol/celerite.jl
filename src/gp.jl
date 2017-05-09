@@ -1,280 +1,239 @@
-import Base.LAPACK.gbtrf!
-import Base.LAPACK.gbtrs!
-
+# Translating DFM's python version:
 include("terms.jl")
-include("bandec_trans.jl")
-include("banbks_trans.jl")
 
 type Celerite
     kernel::Term
     computed::Bool
-    use_lapack::Bool
-    a::Array{Float64}
-    al::Array{Float64}
-    ipiv::Array{Int64}
-    x::Array{Float64}
+    D::Vector{Float64}
+    Xp::Array{Float64}
+    up::Array{Float64}
+    phi::Array{Float64}
+    x::Vector{Float64}
     logdet::Float64
     n::Int64
-    width::Int64
-    dim_ext::Int64
-    block_size::Int64
+    J::Int64
 
-    Celerite(kernel; use_lapack=false) = new(kernel, false, use_lapack, [], [], [])
+#    Celerite(kernel) = new(kernel, false, [], [], [], [], [])
+    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0))
 end
 
-function build_extended_system(alpha_real::Vector, beta_real::Vector,
-                               alpha_complex_real::Vector, alpha_complex_imag::Vector,
-                               beta_complex_real::Vector, beta_complex_imag::Vector,
-                               x::Vector, A::Array, offset_factor)
-    # Compute all the dimensions
-    p_real = length(alpha_real)
-    p_complex = length(alpha_complex_real)
-    n = length(x)
-    block_size = 2 * p_real + 4 * p_complex + 1
-    dim_ext = block_size * (n - 1) + 1
-    width = p_real + 2 * p_complex + 2
-    if (p_complex == 0)
-        width = p_real + 1
+function cholesky!(a_real::Vector{Float64}, c_real::Vector{Float64},
+                       a_comp::Vector{Float64}, b_comp::Vector{Float64}, 
+                       c_comp::Vector{Float64}, d_comp::Vector{Float64},
+                       t::Vector{Float64}, diag::Vector{Float64}, X::Array{Float64,2}, 
+                       phi::Array{Float64,2}, u::Array{Float64,2}, D::Vector{Float64})
+#
+# Fast Cholesky solver based on low-rank decomposition due to Sivaram, plus
+# real implementation of celerite term.
+#
+# Compute the dimensions of the problem:
+    N = length(t)
+# Number of real components:
+    J_real = length(a_real)
+# Number of complex components:
+    J_comp = length(a_comp)
+# Rank of semi-separable components:
+    J = J_real + 2*J_comp
+# phi is used to stably compute exponentials between time steps:
+    phi = _reshape!(phi, J, N-1)
+# u, X & D are low-rank matrices and diagonal component:
+    u = _reshape!(u, J, N)
+    X = _reshape!(X, J, N)
+    D = _reshape!(D, N)
+
+# Sum over the diagonal kernel amplitudes:    
+    a_sum = sum(a_real) + sum(a_comp)
+# Compute the first element:
+    D[1] = sqrt(diag[1] + a_sum)
+    value = 1.0 / D[1]
+    for j in 1:J_real
+        u[j, 1] = a_real[j]
+        X[j, 1] = value
     end
-
-    # This will be needed if we decide to use LAPACK too
-    offset = offset_factor * width
-
-    # Set up the extended matrix.
-    if size(A) != (1+width+offset, dim_ext)
-        A = zeros(Float64, 1+width+offset, dim_ext)
-    else
-        fill!(A, 0.0)
+# We are going to compute cosine & sine recursively - allocate arrays for each complex
+# component:
+    cd::Vector{Float64} = zeros(J_comp)
+    sd::Vector{Float64} = zeros(J_comp)
+# Initialize the computation of X:
+    for j in 1:J_comp
+        cd[j] = cos(d_comp[j]*t[1])
+        sd[j] = sin(d_comp[j]*t[1])
+        u[J_real+2*j-1, 1] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
+        u[J_real+2*j  , 1] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
+        X[J_real+2*j-1, 1] = cd[j]*value
+        X[J_real+2*j, 1]   = sd[j]*value
     end
-
-    # Compute the diagonal element
-    sum_alpha = sum(alpha_real) + sum(alpha_complex_real)
-
-    # Pre-compute the phis and psis
-    phi_real = Array(Float64, p_real)
-    phi_complex = Array(Float64, p_complex)
-    psi_complex = Array(Float64, p_complex)
-    dt = x[2] - x[1]
-    for j in 1:p_real
-        phi_real[j] = exp(-beta_real[j] * dt)
+# Allocate array for recursive computation of low-rank matrices:   
+    S::Array{Float64, 2} = zeros(J, J)
+    for j in 1:J
+      for k in 1:j
+        S[k,j] = X[k,1]*X[j,1]
+      end
     end
-    for j in 1:p_complex
-        amp = exp(-beta_complex_real[j] * dt)
-        arg = beta_complex_imag[j] * dt
-        phi_complex[j] = amp * cos(arg)
-        psi_complex[j] = -amp * sin(arg)
-    end
-
-    for k in 1:n-1
-        # First column
-        col = block_size * (k - 1) + 1
-        row = offset + 1
-        A[row, col] = sum_alpha
-        row = row + 1
-        for j in 1:p_real
-            A[row, col] = phi_real[j]
-            row = row+1
+# Allocate temporary variables:
+    phij = 0.0 ; dx = 0.0 ; dcd = 0.0 ; dsd = 0.0 ; cdtmp= 0.0 ; uj = 0.0 ;
+    Xj = 0.0 ; Dn = 0.0 ; Sk = 0.0 ; uk = 0.0 ; tmp = 0.0 ; tn = 0.0 ;
+# Loop over remaining indices:
+    @inbounds for n in 2:N
+        # Update phi
+        tn = t[n]
+# Using time differences stabilizes the exponential component and speeds
+# up cosine/sine computation:
+        dx = tn - t[n-1]
+# Compute real components of the low-rank matrices:
+        for j in 1:J_real
+            phi[j, n-1] = exp(-c_real[j]*dx)
+            u[j, n] = a_real[j]
+            X[j, n] = 1.0
         end
-        for j in 1:p_complex
-            A[row, col] = phi_complex[j]
-            A[row+1, col] = psi_complex[j]
-            row = row + 2
+# Compute complex components:
+        for j in 1:J_comp
+            value = exp(-c_comp[j]*dx)
+            phi[J_real+2*j-1, n-1] = value
+            phi[J_real+2*j, n-1]   = value
+            cdtmp = cd[j]
+            dcd = cos(d_comp[j]*dx)
+            dsd = sin(d_comp[j]*dx)
+            cd[j] = cdtmp*dcd-sd[j]*dsd
+            sd[j] = sd[j]*dcd+cdtmp*dsd
+        # Update u and initialize X
+            u[J_real+2*j-1, n] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
+            u[J_real+2*j  , n] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
+            X[J_real+2*j-1, n  ] = cd[j]
+            X[J_real+2*j  , n  ] = sd[j]
         end
-
-        # Block 1
-        col = col + 1
-        row2 = row - 1
-        row = offset
-        if k > 1
-            row3 = offset - p_real - 2*p_complex
-            for j in 1:p_real
-                A[row3, col] = phi_real[j]
-                A[row, col] = phi_real[j]
-                A[row2, col] = -1.0
-                col = col + 1
-                row = row - 1
-            end
-            for j in 1:p_complex
-                A[row3, col] = phi_complex[j]
-                A[row3+1, col] = psi_complex[j]
-                A[row, col] = phi_complex[j]
-                A[row2, col] = -1.0
-
-                A[row3-1, col+1] = psi_complex[j]
-                A[row3, col+1] = -phi_complex[j]
-                A[row-1, col+1] = psi_complex[j]
-                A[row2, col+1] = 1.0
-                col = col + 2
-                row = row - 2
-            end
-        else
-            for j in 1:p_real
-                A[row, col] = phi_real[j]
-                A[row2, col] = -1.0
-                col = col+1
-                row = row-1
-            end
-            for j in 1:p_complex
-                A[row, col] = phi_complex[j]
-                A[row2, col] = -1.0
-                A[row-1, col+1] = psi_complex[j]
-                A[row2, col+1] = 1.0
-                col = col+2
-                row = row-2
+        
+        # Update S
+        for j in 1:J
+            phij = phi[j,n-1]
+            for k in 1:j
+                S[k, j] = phij*phi[k, n-1]*S[k, j]
             end
         end
-
-        # Block 3
-        row = offset - p_real - 2*p_complex + 1;
-        row3 = row2 - p_real;
-        if k-1 < n-2
-            # Update the phis and psis
-            dt = x[k+2] - x[k+1]
-            for j in 1:p_real
-                phi_real[j] = exp(-beta_real[j] * dt)
+        
+        # Update D and X
+        Dn = 0.0
+        for j in 1:J
+            uj = u[j,n]
+            Xj = X[j,n]
+            for k in 1:j-1
+                Sk = S[k, j]
+                tmp = uj * Sk
+                uk = u[k,n]
+                Dn += uk * tmp
+                Xj -= uk*Sk
+                X[k, n] -= tmp
             end
-            for j in 1:p_complex
-                amp = exp(-beta_complex_real[j] * dt)
-                arg = beta_complex_imag[j] * dt;
-                phi_complex[j] = amp * cos(arg)
-                psi_complex[j] = -amp * sin(arg)
-            end
-
-            for j in 1:p_real
-                A[row, col] = -1.0
-                A[row2 - j + 1, col] = alpha_real[j]
-                A[row2 + 1, col] = phi_real[j]
-                col = col+1
-            end
-            for j in 1:p_complex
-                A[row, col] = -1.0
-                A[row3 - 2*(j-1), col] = alpha_complex_real[j]
-                A[row2 + 1, col] = phi_complex[j]
-                A[row2 + 2, col] = psi_complex[j]
-
-                A[row, col+1] = 1.0
-                A[row3 - 2*(j-1) - 1, col+1] = alpha_complex_imag[j]
-                A[row2, col+1] = psi_complex[j]
-                A[row2 + 1, col+1] = -phi_complex[j]
-                col = col + 2
-            end
-        else
-            for j in 1:p_real
-                A[row, col] = -1.0
-                A[row2 - j + 1, col] = alpha_real[j]
-                col = col+1
-            end
-            for j in 1:p_complex
-                A[row, col] = -1.0
-                A[row3 - 2*(j-1), col] = alpha_complex_real[j]
-                A[row, col+1] = 1.0
-                A[row3 - 2*(j-1) - 1, col+1] = alpha_complex_imag[j]
-                col = col + 2
-            end
+            tmp = uj * S[j, j]
+            Dn += .5*uj * tmp
+            X[j, n] = Xj - tmp
         end
-
-        for j in 1:p_real
-            A[row, col] = alpha_real[j]
-            row = row+1
+# Finalize computation of D:
+        Dn = sqrt(diag[n]+a_sum-2.0*Dn)
+        D[n] = Dn
+# Finalize computation of X:
+        for j in 1:J
+            X[j, n] /= Dn
         end
-        for j in 1:p_complex
-            A[row, col] = alpha_complex_real[j]
-            A[row+1, col] = alpha_complex_imag[j]
-            row = row+2
+        # Update S
+        Xj = 0.0
+        for j in 1:J
+            Xj = X[j,n]
+            for k in 1:j
+                S[k, j] += Xj*X[k, n]
+            end
         end
     end
-
-    A[offset+1, end] = sum_alpha
-    return width, dim_ext, block_size, A
+# Finished looping over n.  Now return components to the calling routine
+# so that these may be used in arithmetic:
+    return D,X,u,phi
 end
 
-function compute!(gp::Celerite, x, yerr=0.0)
-    offset_factor = 1
-    if gp.use_lapack
-        offset_factor = 2
-    end
+function compute!(gp::Celerite, x, yerr = 0.0)
+# Call the choleksy function to decompose & update
+# the components of gp with X,D,V,U,etc. 
+  coeffs = get_all_coefficients(gp.kernel)
+  var = yerr.^2 + zeros(Float64, length(x))
+  gp.n = length(x)
+#  println(size(x)," ",size(var)," ",size(gp.Xp)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
+# Something is wrong with the following line, which I need to debug:  [ ]
+#  gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.Xp, gp.phi, gp.up, gp.D)
+  @time gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
+  gp.J = size(gp.Xp)[1]
+# Compute the log determinant (square the determinant of the Cholesky factor):
+  gp.logdet = 2.0*sum(log(gp.D))
+#  gp.logdet = sum(log(gp.D))
+  gp.x = x
+  gp.computed = true
+  return gp.logdet
+end
 
-    gp.n = length(x)
-    coeffs = get_all_coefficients(gp.kernel)
-    gp.width, gp.dim_ext, gp.block_size, gp.a = build_extended_system(coeffs..., convert(Vector{Float64}, x), gp.a, offset_factor)
-
-    # Add the yerr
-    var = yerr.^2 + zeros(Float64, length(x))
-    offset = offset_factor * gp.width + 1
-    for k in 1:length(var)
-        j = (k-1)*gp.block_size+1
-        gp.a[offset, j] = gp.a[offset, j] + var[k]
-    end
-
-    if gp.use_lapack
-        gp.a, gp.ipiv = gbtrf!(gp.width, gp.width, gp.dim_ext, gp.a)
-        gp.logdet = 0.0
-        for i in 1:gp.dim_ext
-            gp.logdet += log(abs(gp.a[1+2*gp.width, i]))
-        end
-    else
-        # Resize the work arrays if needed
-        if size(gp.al) != (gp.width, gp.dim_ext)
-            gp.al = Array(Float64, gp.width, gp.dim_ext)
-        end
-        if length(gp.ipiv) != gp.dim_ext
-            gp.ipiv = Array(Int64, gp.dim_ext)
-        end
-
-        bandec_trans(gp.a, gp.dim_ext, gp.width, gp.width, gp.al, gp.ipiv)
-        gp.logdet = 0.0
-        for i in 1:gp.dim_ext
-            gp.logdet += log(abs(gp.a[1, i]))
-        end
-    end
-
-    gp.x = x
-    gp.computed = true
-    return gp.logdet
+function invert_lower(gp::Celerite,y)
+# Applies just the lower inverse:  L^{-1}.y:
+  @assert(gp.computed)
+  N = gp.n
+  @assert(length(y)==N)
+  z = zeros(Float64,N)
+# The following lines solve L.z = y for z:
+  z[1] = y[1]/gp.D[1]
+  f = zeros(Float64,gp.J)
+  for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
+  end
+  return z
 end
 
 function apply_inverse(gp::Celerite, y)
-    if !gp.computed
-        error("You must compute the gp first")
-    end
-    if size(y, 1) != gp.n
-        error("Dimension mismatch")
-    end
+# Solves for K.b=y for b.
+  @assert(gp.computed)
+  N = gp.n
+  @assert(length(y)==N)
+  z = zeros(Float64,N)
+# The following lines solve L.z = y for z:
+  z[1] = y[1]/gp.D[1]
+  f = zeros(Float64,gp.J)
+  for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
+  end
+# The following solves L^T.z = y for z:
+  y = copy(z)
+  z = zeros(Float64,N)
+  z[N] = y[N] / gp.D[N]
+  f = zeros(Float64,gp.J)
+  for n=N-1:-1:1 #in range(N-2, -1, -1):
+    f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+    z[n] = (y[n] - sum(gp.Xp[:,n].*f)) / gp.D[n]
+  end
+# The result is the solution of L.L^T.z = y for z,
+# or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
+  return z
+end
 
-    m = gp.width
-
-    result = Array(Float64, size(y)...)
-    if gp.use_lapack
-        bex = zeros(Float64, gp.dim_ext, size(y, 2))
-        for k in 1:size(y, 2)
-            for i in 1:gp.n
-                bex[(i-1)*gp.block_size+1, k] = y[i, k]
-            end
-        end
-        gbtrs!('N', m, m, gp.dim_ext, gp.a, gp.ipiv, bex)
-        for k in 1:size(y, 2)
-            for i in 1:gp.n
-                result[i, k] = bex[(i-1)*gp.block_size+1, k]
-            end
-        end
-    else
-        # Loop over columns
-        bex = Array(Float64, gp.dim_ext)
-        for k in 1:size(y, 2)
-            fill!(bex, 0.0)
-            for i in 1:gp.n
-                bex[(i-1)*gp.block_size+1] = y[i, k]
-            end
-            banbks_trans(gp.a, gp.dim_ext, m, m, gp.al, gp.ipiv, bex)
-            for i in 1:gp.n
-                result[i, k] = bex[(i-1)*gp.block_size+1]
-            end
-        end
-    end
-    return result
+function simulate_gp(gp::Celerite, y)
+# Multiplies Cholesky factor times random Gaussian vector (y is N(1,0) ) to simulate
+# a Gaussian process.
+# If iid is zeros, then draw from random normal deviates:
+# Check that Cholesky factor has been computed
+# Carry out multiplication
+# Return simulated correlated noise vector
+N=gp.n
+@assert(length(y)==N)
+z = zeros(Float64,N)
+z[1] = gp.D[1]*y[1]
+f = zeros(Float64,gp.J)
+for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* y[n-1])
+    z[n] = gp.D[n]*y[n] + sum(gp.up[:,n].*f)
+end
+# Returns z=L.y
+return z
 end
 
 function log_likelihood(gp::Celerite, y)
+# O(N) log likelihood computation once the low-rank Cholesky decomposition is completed
+    @assert(gp.computed)
     if size(y, 2) != 1
         error("y must be 1-D")
     end
@@ -286,7 +245,135 @@ function log_likelihood(gp::Celerite, y)
     return -0.5 * nll
 end
 
+function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Vector,yerr::Float64)
+# This carries out the full GP solver using linear algebra on full covariance matrix.
+# WARNING: do not use this with large datasets.
+  N = length(t)
+  @assert(length(y0)==length(t))
+  u = zeros(Float64,N,J*2)
+  v = zeros(Float64,N,J*2)
+# Compute the full U/V matrices:
+  for i=1:N
+    for j=1:J
+      expcjt = exp(-cj[j]*t[i])
+      cosdjt = cos(dj[j]*t[i])
+      sindjt = sin(dj[j]*t[i])
+      u[i,j*2-1]=aj[j]*expcjt*cosdjt+bj[j]*expcjt*sindjt
+      u[i,j*2  ]=aj[j]*expcjt*sindjt-bj[j]*expcjt*cosdjt
+      v[i,j*2-1]=cosdjt/expcjt
+      v[i,j*2  ]=sindjt/expcjt
+    end
+  end
+# Diagonal components:
+  diag = fill(yerr^2 + sum(aj),N)
+
+# Compute the kernel:
+  K = zeros(Float64,N,N)
+  for i=1:N
+    for j=1:N
+      K[i,j] = sum(aj.*exp(-cj.*abs(t[i]-t[j])).*cos(dj.*abs(t[i]-t[j]))+bj.*exp(-cj.*abs(t[i]-t[j])).*sin(dj.*abs(t[i]-t[j])))
+    end
+    K[i,i]=diag[i]
+  end
+
+# Check that equation (1) holds:
+  K0 = tril(*(u, v'), -1) + triu(*(v, u'), 1)
+  for i=1:N
+    K0[i,i] = diag[i]
+  end
+  println("Semiseparable error: ",maximum(abs(K - K0)))
+  return logdet(K),K
+end
+
+function predict!(gp::Celerite, t, y, x)
+# Predict future times, x, based on a 'training set' of values y at times t.
+# Runs in O((M+N)J^2) (variance is not computed, though)
+    a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
+    println("a_real: ",a_real)
+    println("c_real: ",c_real)
+    println("a_comp: ",a_comp)
+    println("b_comp: ",b_comp)
+    println("c_comp: ",c_comp)
+    println("d_comp: ",d_comp)
+    N = length(y)
+    M = length(x)
+    println("M: ",M)
+    println("N: ",N)
+    J_real = length(a_real)
+    J_comp = length(a_comp)
+    J = J_real + 2*J_comp
+
+    b = apply_inverse(gp,y)
+    println("b: ",minimum(b),maximum(b))
+    Q = zeros(J)
+    X = zeros(J)
+    pred = zeros(x)
+    
+    # Forward pass
+    m = 1
+    while m < M && x[m] <= t[1]
+      m += 1
+    end
+    for n=1:N
+        if n < N
+          tref = t[n+1] 
+        else 
+          tref = t[N]
+        end
+        Q[1:J_real] = (Q[1:J_real] + b[n]).*exp(-c_real.*(tref-t[n]))
+        Q[J_real+1:J_real+J_comp] += b[n].*cos(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(tref-t[n]))
+        Q[J_real+J_comp+1:J] += b[n].*sin(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(tref-t[n]))
+
+        while m < M+1 && (n == N || x[m] <= t[n+1])
+            X[1:J_real] = a_real.*exp(-c_real.*(x[m]-tref))
+            X[J_real+1:J_real+J_comp]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+            X[J_real+1:J_real+J_comp] += b_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
+            X[J_real+J_comp+1:J]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
+            X[J_real+J_comp+1:J] -= b_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+
+            pred[m] = dot(X, Q)
+            m += 1
+        end
+    end
+
+    # Backward pass
+    m = M
+    while m >= 1 && x[m] > t[N]
+        m -= 1
+    end
+    fill!(Q,0.0)
+    for n=N:-1:1
+        if n > 1
+          tref = t[n-1] 
+        else 
+          tref = t[1]
+        end
+        Q[1:J_real] += b[n].*a_real
+        Q[1:J_real] = Q[1:J_real].*exp(-c_real.*(t[n]-tref))
+        Q[J_real+1:J_real+J_comp] += b[n].*a_comp.*cos(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] += b[n].*b_comp.*sin(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(t[n]-tref))
+        Q[J_real+J_comp+1:J] += b[n].*a_comp.*sin(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] -= b[n].*b_comp.*cos(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(t[n]-tref))
+
+        while m >= 1 && (n == 1 || x[m] > t[n-1])
+            X[1:J_real] = exp(-c_real.*(tref-x[m]))
+            X[J_real+1:J_real+J_comp] = exp(-c_comp.*(tref-x[m])).*cos(d_comp.*x[m])
+            X[J_real+J_comp+1:J] = exp(-c_comp.*(tref-x[m])).*sin(d_comp.*x[m])
+
+            pred[m] += dot(X, Q)
+            m -= 1
+        end
+    end 
+  return pred
+end
+
 function get_matrix(gp::Celerite, xs...)
+# Gets the full covariance matrix.  Can provide autocorrelation or cross-correlation.
+# WARNING: Do not use with large datasets.
     if length(xs) > 2
         error("At most 2 arguments can be provided")
     end
@@ -314,7 +401,9 @@ function get_matrix(gp::Celerite, xs...)
     return get_value(gp.kernel, tau)
 end
 
-function predict(gp::Celerite, y, t; return_cov=true, return_var=false)
+function predict_full(gp::Celerite, y, t; return_cov=true, return_var=false)
+# Prediction with covariance using full covariance matrix
+# WARNING: do not use this with large datasets!
     alpha = apply_inverse(gp, y)
     Kxs = get_matrix(gp, t, gp.x)
     mu = Kxs * alpha
@@ -332,4 +421,12 @@ function predict(gp::Celerite, y, t; return_cov=true, return_var=false)
     cov = get_matrix(gp, t)
     cov = cov - Kxs * apply_inverse(gp, KxsT)
     return mu, cov
+end
+
+function _reshape!(A::Array{Float64}, dims...)
+# Allocates arrays if size is not correct
+    if size(A) != dims
+        A = Array{Float64}(dims...)
+    end
+    return A
 end
