@@ -60,16 +60,16 @@ ntrial = 2
 # Cholesky method
 # Compute Cholesky factorization:
   if itest == 9
-    logdet_test = compute!(gp, t, yerr)
-    @profile logdet_test = compute!(gp, t, yerr)
+    logdet_test = compute_ldlt!(gp, t, yerr)
+    @profile logdet_test = compute_ldlt!(gp, t, yerr)
     Profile.print(format=:flat)
 #  else
   end
   logdet_test = 0.0
-  logdet_test = compute!(gp, t, yerr)
+  logdet_test = compute_ldlt!(gp, t, yerr)
   time_zero = tic()
   for itrial = 1:ntrial
-    logdet_test = compute!(gp, t, yerr)
+    logdet_test = compute_ldlt!(gp, t, yerr)
   end
 #  end
   time_complex[itest]=toc()/ntrial
