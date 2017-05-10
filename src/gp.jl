@@ -340,6 +340,34 @@ function invert_lower(gp::Celerite,y)
   return z
 end
 
+function apply_inverse_ldlt(gp::Celerite, y)
+# Solves for K.b=y for b with LDLT decomposition.
+  @assert(gp.computed)
+  N = gp.n
+  @assert(length(y)==N)
+  z = zeros(Float64,N)
+# The following lines solve L.z = y for z:
+#  z[1] = y[1]/gp.D[1]
+  z[1] = y[1]
+  f = zeros(Float64,gp.J)
+  for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    z[n] = (y[n] - sum(gp.up[:,n].*f))
+  end
+# The following solves L^T.z = y for z:
+  y = copy(z)
+  z = zeros(Float64,N)
+  z[N] = y[N] / gp.D[N]
+  f = zeros(Float64,gp.J)
+  for n=N-1:-1:1 #in range(N-2, -1, -1):
+    f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+    z[n] = y[n]/ gp.D[n] - sum(gp.Xp[:,n].*f)
+  end
+# The result is the solution of L.L^T.z = y for z,
+# or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
+  return z
+end
+
 function apply_inverse(gp::Celerite, y)
 # Solves for K.b=y for b.
   @assert(gp.computed)
@@ -441,7 +469,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
   return logdet(K),K
 end
 
-function predict!(gp::Celerite, t, y, x)
+function predict_ldlt!(gp::Celerite, t, y, x)
 # Predict future times, x, based on a 'training set' of values y at times t.
 # Runs in O((M+N)J^2) (variance is not computed, though)
     a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
@@ -459,7 +487,7 @@ function predict!(gp::Celerite, t, y, x)
     J_comp = length(a_comp)
     J = J_real + 2*J_comp
 
-    b = apply_inverse(gp,y)
+    b = apply_inverse_ldlt(gp,y)
     println("b: ",minimum(b),maximum(b))
     Q = zeros(J)
     X = zeros(J)
@@ -527,6 +555,92 @@ function predict!(gp::Celerite, t, y, x)
   return pred
 end
 
+function predict!(gp::Celerite, t, y, x)
+# Predict future times, x, based on a 'training set' of values y at times t.
+# Runs in O((M+N)J^2) (variance is not computed, though)
+    a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
+    println("a_real: ",a_real)
+    println("c_real: ",c_real)
+    println("a_comp: ",a_comp)
+    println("b_comp: ",b_comp)
+    println("c_comp: ",c_comp)
+    println("d_comp: ",d_comp)
+    N = length(y)
+    M = length(x)
+    println("M: ",M)
+    println("N: ",N)
+    J_real = length(a_real)
+    J_comp = length(a_comp)
+    J = J_real + 2*J_comp
+
+    b = apply_inverse(gp,y)
+    println("b: ",minimum(b),maximum(b))
+    Q = zeros(J)
+    X = zeros(J)
+    pred = zeros(x)
+
+    # Forward pass
+    m = 1
+    while m < M && x[m] <= t[1]
+      m += 1
+    end
+    for n=1:N
+        if n < N
+          tref = t[n+1]
+        else
+          tref = t[N]
+        end
+        Q[1:J_real] = (Q[1:J_real] + b[n]).*exp(-c_real.*(tref-t[n]))
+        Q[J_real+1:J_real+J_comp] += b[n].*cos(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(tref-t[n]))
+        Q[J_real+J_comp+1:J] += b[n].*sin(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(tref-t[n]))
+
+        while m < M+1 && (n == N || x[m] <= t[n+1])
+            X[1:J_real] = a_real.*exp(-c_real.*(x[m]-tref))
+            X[J_real+1:J_real+J_comp]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+            X[J_real+1:J_real+J_comp] += b_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
+            X[J_real+J_comp+1:J]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
+            X[J_real+J_comp+1:J] -= b_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+
+            pred[m] = dot(X, Q)
+            m += 1
+        end
+    end
+
+    # Backward pass
+    m = M
+    while m >= 1 && x[m] > t[N]
+        m -= 1
+    end
+    fill!(Q,0.0)
+    for n=N:-1:1
+        if n > 1
+          tref = t[n-1]
+        else
+          tref = t[1]
+        end
+        Q[1:J_real] += b[n].*a_real
+        Q[1:J_real] = Q[1:J_real].*exp(-c_real.*(t[n]-tref))
+        Q[J_real+1:J_real+J_comp] += b[n].*a_comp.*cos(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] += b[n].*b_comp.*sin(d_comp.*t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(t[n]-tref))
+        Q[J_real+J_comp+1:J] += b[n].*a_comp.*sin(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] -= b[n].*b_comp.*cos(d_comp.*t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(t[n]-tref))
+
+        while m >= 1 && (n == 1 || x[m] > t[n-1])
+            X[1:J_real] = exp(-c_real.*(tref-x[m]))
+            X[J_real+1:J_real+J_comp] = exp(-c_comp.*(tref-x[m])).*cos(d_comp.*x[m])
+            X[J_real+J_comp+1:J] = exp(-c_comp.*(tref-x[m])).*sin(d_comp.*x[m])
+
+            pred[m] += dot(X, Q)
+            m -= 1
+        end
+    end
+  return pred
+end
+
 function get_matrix(gp::Celerite, xs...)
 # Gets the full covariance matrix.  Can provide autocorrelation or cross-correlation.
 # WARNING: Do not use with large datasets.
@@ -555,6 +669,28 @@ function get_matrix(gp::Celerite, xs...)
 
     tau = broadcast(-, reshape(x1, length(x1), 1), reshape(x2, 1, length(x2)))
     return get_value(gp.kernel, tau)
+end
+
+function predict_full_ldlt(gp::Celerite, y, t; return_cov=true, return_var=false)
+# Prediction with covariance using full covariance matrix
+# WARNING: do not use this with large datasets!
+    alpha = apply_inverse_ldlt(gp, y)
+    Kxs = get_matrix(gp, t, gp.x)
+    mu = Kxs * alpha
+    if !return_cov && !return_var
+        return mu
+    end
+
+    KxsT = transpose(Kxs)
+    if return_var
+        v = -sum(KxsT .* apply_inverse_ldlt(gp, KxsT), 1)
+        v = v + get_value(gp.kernel, [0.0])[1]
+        return mu, v[1, :]
+    end
+
+    cov = get_matrix(gp, t)
+    cov = cov - Kxs * apply_inverse_ldlt(gp, KxsT)
+    return mu, cov
 end
 
 function predict_full(gp::Celerite, y, t; return_cov=true, return_var=false)

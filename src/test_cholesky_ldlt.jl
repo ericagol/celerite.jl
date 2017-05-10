@@ -77,14 +77,14 @@ ntrial = 2
   if N < 2000
     logdetK,K = full_solve(t,y0,aj,bj,cj,dj,yerr)
     println("Determinant: ",logdetK," ",logdet_test)
-    println("Vector: ",maximum(abs(\(K,y0)-apply_inverse(gp,y0))))
+    println("Vector: ",maximum(abs(\(K,y0)-apply_inverse_ldlt(gp,y0))))
   end
   println(N_test[itest]," ",time_complex[itest])
   time_prior = time_complex[itest]
   M = N*4
   tpred = sort(rand(M)).*200
-  ypred = predict!(gp, t, y0, tpred)
-  ypred_full = predict_full(gp, y0, tpred; return_cov = false)
+  ypred = predict_ldlt!(gp, t, y0, tpred)
+  ypred_full = predict_full_ldlt(gp, y0, tpred; return_cov = false)
   itest +=1
 #end
 scatter(t,y0)
