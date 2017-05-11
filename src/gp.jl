@@ -395,6 +395,26 @@ function apply_inverse(gp::Celerite, y)
   return z
 end
 
+function simulate_gp_ldlt(gp::Celerite, y)
+# Multiplies Cholesky factor times random Gaussian vector (y is N(1,0) ) to simulate
+# a Gaussian process.
+# If iid is zeros, then draw from random normal deviates:
+# Check that Cholesky factor has been computed
+# Carry out multiplication
+# Return simulated correlated noise vector
+N=gp.n
+@assert(length(y)==N)
+z = zeros(Float64,N)
+z[1] = gp.sqrt(D[1])*y[1]
+f = zeros(Float64,gp.J)
+for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* y[n-1])
+    z[n] = gp.sqrt(D[n])*y[n] + sum(gp.up[:,n].*f)
+end
+# Returns z=L.y
+return z
+end
+
 function simulate_gp(gp::Celerite, y)
 # Multiplies Cholesky factor times random Gaussian vector (y is N(1,0) ) to simulate
 # a Gaussian process.
@@ -413,6 +433,20 @@ for n =2:N # in range(1, N):
 end
 # Returns z=L.y
 return z
+end
+
+function log_likelihood_ldlt(gp::Celerite, y)
+# O(N) log likelihood computation once the low-rank Cholesky decomposition is completed
+    @assert(gp.computed)
+    if size(y, 2) != 1
+        error("y must be 1-D")
+    end
+    alpha = apply_inverse_ldlt(gp, y)
+    nll = gp.logdet + gp.n * log(2*pi)
+    for i in 1:gp.n
+        nll = nll + alpha[i] * y[i]
+    end
+    return -0.5 * nll
 end
 
 function log_likelihood(gp::Celerite, y)
