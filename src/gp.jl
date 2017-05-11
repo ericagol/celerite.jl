@@ -110,7 +110,6 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
             phij = phi[j,n-1]
             Xj = X[j,n-1]
             for k in 1:j
-#                S[k, j] = phij*phi[k, n-1]*S[k, j]
                 S[k, j] = phij*phi[k, n-1]*(S[k, j] + Dn*Xj*X[k,n-1])
             end
         end
@@ -295,11 +294,17 @@ function compute_ldlt!(gp::Celerite, x, yerr = 0.0)
 #  println(size(x)," ",size(var)," ",size(gp.Xp)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
 #  gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.Xp, gp.phi, gp.up, gp.D)
-  @time gp.D,gp.Xp,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
+#  @time gp.D,gp.Xp,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
+  gp.D,gp.Xp,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
   gp.J = size(gp.Xp)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
-  gp.logdet = sum(log(gp.D))
 #  gp.logdet = sum(log(gp.D))
+  logdet=0.0
+  for i=1:gp.n
+    logdet += log(gp.D[i])
+  end
+#  gp.logdet = sum(log(gp.D))
+  gp.logdet = logdet
   gp.x = x
   gp.computed = true
   return gp.logdet
@@ -467,6 +472,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
 # This carries out the full GP solver using linear algebra on full covariance matrix.
 # WARNING: do not use this with large datasets.
   N = length(t)
+  J = length(aj)
   @assert(length(y0)==length(t))
   u = zeros(Float64,N,J*2)
   v = zeros(Float64,N,J*2)

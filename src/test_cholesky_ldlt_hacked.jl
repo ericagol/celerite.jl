@@ -1,15 +1,16 @@
 # Translating DFM's python version:
-using PyPlot
+#using PyPlot
 #using celerite
 include("gp.jl")
 include("sturms_theorem.jl")
 
 #function cholesky_ssm_complex(J0,J) # returns N_test,time_complex
+function test_cholesky_ldlt(J0,J) # returns N_test,time_complex
 #N = 1000
 # Number of real, exponential celerite kernel terms:
-J0 = 0
+#J0 = 2
 # Total number of complex terms:
-J = 16
+#J = 16
 
 # Iterate until we have a positive definite kernel (defined by Sturm's theorem):
 num_pos_root = 1
@@ -33,8 +34,8 @@ end
 
 
 # Run a timing test:
-#N_test = [64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288]
-N_test = [512]
+N_test = [64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288]
+#N_test = [512]
 #N_test = [64,256,1024,4096,16384]
 #N_test = [N]
 ntest = length(N_test)
@@ -43,9 +44,9 @@ itest = 1
 time_prior = 0.0
 yerr = 0.1
 #while itest <= ntest && time_prior < 3.0
-ntrial = 2
-#while itest <= ntest
+while itest <= ntest
   N = N_test[itest]
+  ntrial = 2*maximum(N_test)/N
 # Generate some random time data:
   t = sort(rand(N)).*100
   y0 = sin(t)
@@ -59,12 +60,12 @@ ntrial = 2
   gp = Celerite(kernel)
 # Cholesky method
 # Compute Cholesky factorization:
-  if itest == 9
-    logdet_test = compute_ldlt!(gp, t, yerr)
-    @profile logdet_test = compute_ldlt!(gp, t, yerr)
-    Profile.print(format=:flat)
+#  if itest == 9
+#    logdet_test = compute_ldlt!(gp, t, yerr)
+#    @profile logdet_test = compute_ldlt!(gp, t, yerr)
+#    Profile.print(format=:flat)
 #  else
-  end
+#  end
   logdet_test = 0.0
   logdet_test = compute_ldlt!(gp, t, yerr)
   time_zero = tic()
@@ -81,25 +82,26 @@ ntrial = 2
   end
   println(N_test[itest]," ",time_complex[itest])
   time_prior = time_complex[itest]
-  M = N*4
-  tpred = sort(rand(M)).*200
-  ypred = predict_ldlt!(gp, t, y0, tpred)
-  ypred_full = predict_full_ldlt(gp, y0, tpred; return_cov = false)
   itest +=1
-#end
-scatter(t,y0)
-plot(tpred,ypred)
-plot(tpred,ypred_full)
-println("Prediction error: ",maximum(abs(ypred-ypred_full)))
+end
+
+#M = N*4
+#tpred = sort(rand(M)).*200
+#ypred = predict_ldlt!(gp, t, y0, tpred)
+#ypred_full = predict_full_ldlt(gp, y0, tpred; return_cov = false)
+#scatter(t,y0)
+#plot(tpred,ypred)
+#plot(tpred,ypred_full)
+#println("Prediction error: ",maximum(abs(ypred-ypred_full)))
 
 #loglog(N_test,time_complex)
-data = readdlm("c_speed.txt",',')
-N_c = vec(data[:,4])
-t_c = vec(data[:,5])
+#data = readdlm("c_speed.txt",',')
+#N_c = vec(data[:,4])
+#t_c = vec(data[:,5])
 #loglog(N_test,(N_test./256).*2e-3)
 #loglog(N_c,t_c)
 #println(time_complex./((N_test./256).*2e-3))
-println(time_complex./t_c)
+#println(time_complex./t_c)
 
 ## Convert from X' back to X:
 ## (Not sure if I need to do this)
@@ -118,3 +120,5 @@ println(time_complex./t_c)
   
 #println("Cholesky error: ",maximum(abs(*(L, L') - K)))
 
+return N_test,time_complex
+end
