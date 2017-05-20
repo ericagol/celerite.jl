@@ -7,9 +7,9 @@ include("sturms_theorem.jl")
 #function cholesky_ssm_complex(J0,J) # returns N_test,time_complex
 #N = 1000
 # Number of real, exponential celerite kernel terms:
-J0 = 0
-# Total number of complex terms:
-J = 16
+J0 = 1
+# Total number of terms:
+J = 1
 
 # Iterate until we have a positive definite kernel (defined by Sturm's theorem):
 num_pos_root = 1
@@ -49,12 +49,22 @@ ntrial = 2
 # Generate some random time data:
   t = sort(rand(N)).*100
   y0 = sin(t)
-  kernel = RealTerm(log(aj[1]),log(cj[1]))
-  for i=2:J0
-    kernel = kernel + RealTerm(log(aj[i]),log(cj[i]))
+  i=1
+  if J0 > 0
+    kernel = RealTerm(log(aj[i]),log(cj[i]))
+    while i < J0
+      i +=1
+      kernel = kernel + RealTerm(log(aj[i]),log(cj[i]))
+    end
   end
-  for i=J0+1:J
-    kernel = kernel + ComplexTerm(log(aj[i]),log(bj[i]),log(cj[i]),log(dj[i]))
+  if i < J
+    if J0 == 0
+      kernel = ComplexTerm(log(aj[i]),log(bj[i]),log(cj[i]),log(dj[i]))
+    end
+    while i < J
+      i +=1
+      kernel = kernel + ComplexTerm(log(aj[i]),log(bj[i]),log(cj[i]),log(dj[i]))
+    end
   end
   gp = Celerite(kernel)
 # Cholesky method
