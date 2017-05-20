@@ -87,7 +87,7 @@ ntrial = 2
   if N < 2000
     logdetK,K = full_solve(t,y0,aj,bj,cj,dj,yerr)
     println("Determinant: ",logdetK," ",logdet_test)
-    println("Vector: ",maximum(abs(\(K,y0)-apply_inverse_ldlt(gp,y0))))
+    println("Vector: ", maximum(abs.((K \ y0) .- apply_inverse_ldlt(gp, y0))))
   end
   println(N_test[itest]," ",time_complex[itest])
   time_prior = time_complex[itest]
@@ -100,7 +100,7 @@ ntrial = 2
 scatter(t,y0)
 plot(tpred,ypred)
 plot(tpred,ypred_full)
-println("Prediction error: ",maximum(abs(ypred-ypred_full)))
+println("Prediction error: ", maximum(abs.(ypred .- ypred_full)))
 
 #loglog(N_test,time_complex)
 data = readdlm("c_speed.txt",',')

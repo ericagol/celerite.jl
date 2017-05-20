@@ -322,7 +322,7 @@ function compute!(gp::Celerite, x, yerr = 0.0)
   @time gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
   gp.J = size(gp.Xp)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
-  gp.logdet = 2.0*sum(log(gp.D))
+  gp.logdet = 2 * sum(log.(gp.D))
 #  gp.logdet = sum(log(gp.D))
   gp.x = x
   gp.computed = true
@@ -495,7 +495,8 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
   K = zeros(Float64,N,N)
   for i=1:N
     for j=1:N
-      K[i,j] = sum(aj.*exp(-cj.*abs(t[i]-t[j])).*cos(dj.*abs(t[i]-t[j]))+bj.*exp(-cj.*abs(t[i]-t[j])).*sin(dj.*abs(t[i]-t[j])))
+      abs_ti_tj = abs(t[i] - t[j])
+      K[i,j] = sum(aj .* exp.(-cj .* abs_ti_tj) .* cos.(dj .* abs_ti_tj) .+ bj .* exp.(-cj .* abs_ti_tj) .* sin.(dj .* abs_ti_tj))
     end
     K[i,i]=diag[i]
   end
@@ -505,7 +506,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
   for i=1:N
     K0[i,i] = diag[i]
   end
-  println("Semiseparable error: ",maximum(abs(K - K0)))
+  println("Semiseparable error: ", maximum(abs.(K - K0)))
   return logdet(K),K
 end
 
@@ -544,18 +545,20 @@ function predict_ldlt!(gp::Celerite, t, y, x)
         else 
           tref = t[N]
         end
-        Q[1:J_real] = (Q[1:J_real] + b[n]).*exp(-c_real.*(tref-t[n]))
-        Q[J_real+1:J_real+J_comp] += b[n].*cos(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(tref-t[n]))
-        Q[J_real+J_comp+1:J] += b[n].*sin(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(tref-t[n]))
+        tref_tn = tref - t[n]
+        Q[1:J_real] = (Q[1:J_real] + b[n]) .* exp.(-c_real .* tref_tn)
+        Q[J_real+1:J_real+J_comp] += b[n] .* cos.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp] .* exp.(-c_comp .* tref_tn)
+        Q[J_real+J_comp+1:J] += b[n] .* sin.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J] .* exp.(-c_comp .* tref_tn)
 
         while m < M+1 && (n == N || x[m] <= t[n+1])
-            X[1:J_real] = a_real.*exp(-c_real.*(x[m]-tref))
-            X[J_real+1:J_real+J_comp]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
-            X[J_real+1:J_real+J_comp] += b_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
-            X[J_real+J_comp+1:J]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
-            X[J_real+J_comp+1:J] -= b_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+            xm_tref = x[m] - tref
+            X[1:J_real] = a_real .* exp.(-c_real .* xm_tref)
+            X[J_real+1:J_real+J_comp]  = a_comp .* exp.(-c_comp .* xm_tref) .* cos.(d_comp .* x[m])
+            X[J_real+1:J_real+J_comp] += b_comp .* exp.(-c_comp .* xm_tref) .* sin.(d_comp .* x[m])
+            X[J_real+J_comp+1:J]  = a_comp .* exp.(-c_comp .* xm_tref) .* sin.(d_comp .* x[m])
+            X[J_real+J_comp+1:J] -= b_comp .* exp.(-c_comp .* xm_tref) .* cos.(d_comp .* x[m])
 
             pred[m] = dot(X, Q)
             m += 1
@@ -574,19 +577,19 @@ function predict_ldlt!(gp::Celerite, t, y, x)
         else 
           tref = t[1]
         end
-        Q[1:J_real] += b[n].*a_real
-        Q[1:J_real] = Q[1:J_real].*exp(-c_real.*(t[n]-tref))
-        Q[J_real+1:J_real+J_comp] += b[n].*a_comp.*cos(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] += b[n].*b_comp.*sin(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(t[n]-tref))
-        Q[J_real+J_comp+1:J] += b[n].*a_comp.*sin(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] -= b[n].*b_comp.*cos(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(t[n]-tref))
+        Q[1:J_real] += b[n] .* a_real
+        Q[1:J_real] = Q[1:J_real] .* exp.(-c_real .* t[n] - tref)
+        Q[J_real+1:J_real+J_comp] += b[n] .* a_comp .* cos.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] += b[n] .* b_comp .* sin.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp] .* exp.(-c_comp .* t[n] - tref)
+        Q[J_real+J_comp+1:J] += b[n] .* a_comp .* sin.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] -= b[n] .* b_comp .* cos.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J] .* exp.(-c_comp .* t[n] - tref)
 
         while m >= 1 && (n == 1 || x[m] > t[n-1])
-            X[1:J_real] = exp(-c_real.*(tref-x[m]))
-            X[J_real+1:J_real+J_comp] = exp(-c_comp.*(tref-x[m])).*cos(d_comp.*x[m])
-            X[J_real+J_comp+1:J] = exp(-c_comp.*(tref-x[m])).*sin(d_comp.*x[m])
+            X[1:J_real] = exp.(-c_real .* (tref-x[m]))
+            X[J_real+1:J_real+J_comp] = exp.(-c_comp .* (tref - x[m])) .* cos.(d_comp .* x[m])
+            X[J_real+J_comp+1:J] = exp.(-c_comp .* (tref - x[m])) .* sin.(d_comp .* x[m])
 
             pred[m] += dot(X, Q)
             m -= 1
@@ -630,18 +633,18 @@ function predict!(gp::Celerite, t, y, x)
         else
           tref = t[N]
         end
-        Q[1:J_real] = (Q[1:J_real] + b[n]).*exp(-c_real.*(tref-t[n]))
-        Q[J_real+1:J_real+J_comp] += b[n].*cos(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(tref-t[n]))
-        Q[J_real+J_comp+1:J] += b[n].*sin(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(tref-t[n]))
+        Q[1:J_real] = (Q[1:J_real] .+ b[n]) .* exp.(-c_real .* (tref - t[n]))
+        Q[J_real+1:J_real+J_comp] += b[n] .* cos.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp] .* exp.(-c_comp .* (tref - t[n]))
+        Q[J_real+J_comp+1:J] += b[n] .* sin.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J] .* exp.(-c_comp .* (tref - t[n]))
 
         while m < M+1 && (n == N || x[m] <= t[n+1])
-            X[1:J_real] = a_real.*exp(-c_real.*(x[m]-tref))
-            X[J_real+1:J_real+J_comp]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
-            X[J_real+1:J_real+J_comp] += b_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
-            X[J_real+J_comp+1:J]  = a_comp.*exp(-c_comp.*(x[m]-tref)).*sin(d_comp.*x[m])
-            X[J_real+J_comp+1:J] -= b_comp.*exp(-c_comp.*(x[m]-tref)).*cos(d_comp.*x[m])
+            X[1:J_real] = a_real .* exp.(-c_real .* (x[m] - tref))
+            X[J_real+1:J_real+J_comp]  = a_comp .* exp.(-c_comp .* (x[m] - tref)) .* cos.(d_comp .* x[m])
+            X[J_real+1:J_real+J_comp] += b_comp .* exp.(-c_comp .* (x[m] - tref)) .* sin.(d_comp .* x[m])
+            X[J_real+J_comp+1:J]  = a_comp .* exp.(-c_comp .* (x[m] - tref)) .* sin.(d_comp .* x[m])
+            X[J_real+J_comp+1:J] -= b_comp .* exp.(-c_comp .* (x[m] - tref)) .* cos.(d_comp .* x[m])
 
             pred[m] = dot(X, Q)
             m += 1
@@ -660,19 +663,19 @@ function predict!(gp::Celerite, t, y, x)
         else
           tref = t[1]
         end
-        Q[1:J_real] += b[n].*a_real
-        Q[1:J_real] = Q[1:J_real].*exp(-c_real.*(t[n]-tref))
-        Q[J_real+1:J_real+J_comp] += b[n].*a_comp.*cos(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] += b[n].*b_comp.*sin(d_comp.*t[n])
-        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp].*exp(-c_comp.*(t[n]-tref))
-        Q[J_real+J_comp+1:J] += b[n].*a_comp.*sin(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] -= b[n].*b_comp.*cos(d_comp.*t[n])
-        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J].*exp(-c_comp.*(t[n]-tref))
+        Q[1:J_real] += b[n] .* a_real
+        Q[1:J_real] = Q[1:J_real] .* exp.(-c_real .* (t[n]-tref))
+        Q[J_real+1:J_real+J_comp] += b[n] .* a_comp .* cos.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] += b[n] .* b_comp .* sin.(d_comp .* t[n])
+        Q[J_real+1:J_real+J_comp] = Q[J_real+1:J_real+J_comp] .* exp.(-c_comp .* (t[n] - tref))
+        Q[J_real+J_comp+1:J] += b[n] .* a_comp .* sin.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] -= b[n] .* b_comp .* cos.(d_comp .* t[n])
+        Q[J_real+J_comp+1:J] = Q[J_real+J_comp+1:J] .* exp.(-c_comp .* (t[n] - tref))
 
         while m >= 1 && (n == 1 || x[m] > t[n-1])
-            X[1:J_real] = exp(-c_real.*(tref-x[m]))
-            X[J_real+1:J_real+J_comp] = exp(-c_comp.*(tref-x[m])).*cos(d_comp.*x[m])
-            X[J_real+J_comp+1:J] = exp(-c_comp.*(tref-x[m])).*sin(d_comp.*x[m])
+            X[1:J_real] = exp.(-c_real .* (tref - x[m]))
+            X[J_real+1:J_real+J_comp] = exp.(-c_comp .* (tref - x[m])) .* cos.(d_comp .* x[m])
+            X[J_real+J_comp+1:J]      = exp.(-c_comp .* (tref - x[m])) .* sin.(d_comp .* x[m])
 
             pred[m] += dot(X, Q)
             m -= 1
