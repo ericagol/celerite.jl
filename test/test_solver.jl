@@ -4,9 +4,9 @@ import celerite
 function test_solver()
     srand(42)
     N = 100
-    x = sort(10 .* rand(N))
-    y = sin.(x)
-    yerr = 0.01 .+ rand(N) ./ 100
+    x = sort(10*rand(N))
+    y = sin(x)
+    yerr = 0.01 + 0.01*rand(N)
 
     kernel = celerite.RealTerm(0.5, 1.0) + celerite.SHOTerm(0.1, 2.0, -0.5)
     gp = celerite.Celerite(kernel)

@@ -8,11 +8,11 @@ function get_terms(term::Term)
 end
 
 function get_real_coefficients(term::Term)
-    return (Array{Float64}(0), Array{Float64}(0))
+    return (Array(Float64, 0), Array(Float64, 0))
 end
 
 function get_complex_coefficients(term::Term)
-    return (Array{Float64}(0), Array{Float64}(0), Array{Float64}(0), Array{Float64}(0))
+    return (Array(Float64, 0), Array(Float64, 0), Array(Float64, 0), Array(Float64, 0))
 end
 
 function get_all_coefficients(term::Term)
@@ -23,13 +23,13 @@ end
 
 function get_value(term::Term, tau)
     coeffs = get_all_coefficients(term)
-    t = abs.(tau)
+    t = abs(tau)
     k = zeros(tau)
     for i in 1:length(coeffs[1])
-        k .+= coeffs[1][i] .* exp.(-coeffs[2][i] .* t)
+        k = k + coeffs[1][i] .* exp(-coeffs[2][i] .* t)
     end
     for i in 1:length(coeffs[3])
-        k .+= (coeffs[3][i] .* cos.(coeffs[6][i] .* t) .+ coeffs[4][i] .* sin.(coeffs[6][i] .* t)) .* exp.(-coeffs[5][i] .* t)
+        k = k + (coeffs[3][i].*cos(coeffs[6][i].*t) + coeffs[4][i].*sin(coeffs[6][i].*t)) .* exp(-coeffs[5][i].*t)
     end
     return k
 end
@@ -60,7 +60,7 @@ function length(term::Term)
 end
 
 function get_parameter_vector(term::Term)
-    return Array{Float64}(0)
+    return Array(Float64, 0)
 end
 
 function set_parameter_vector!(term::Term, vector::Array)
@@ -76,12 +76,12 @@ function get_terms(term::TermSum)
 end
 
 function get_all_coefficients(term_sum::TermSum)
-    a_real = Array{Float64}(0)
-    c_real = Array{Float64}(0)
-    a_complex = Array{Float64}(0)
-    b_complex = Array{Float64}(0)
-    c_complex = Array{Float64}(0)
-    d_complex = Array{Float64}(0)
+    a_real = Array(Float64, 0)
+    c_real = Array(Float64, 0)
+    a_complex = Array(Float64, 0)
+    b_complex = Array(Float64, 0)
+    c_complex = Array(Float64, 0)
+    d_complex = Array(Float64, 0)
     for term in term_sum.terms
         coeffs = get_all_coefficients(term)
 #        a_real = cat(1, a_real, coeffs[1])
@@ -139,8 +139,8 @@ function get_all_coefficients(term_sum::TermProduct)
 
     # First compute real terms
     nr = nr1 * nr2
-    ar = Array{Float64}(nr)
-    cr = Array{Float64}(nr)
+    ar = Array(Float64, nr)
+    cr = Array(Float64, nr)
     gen = product(zip(c1[1], c1[2]), zip(c2[1], c2[2]))
     for (i, ((aj, cj), (ak, ck))) in enumerate(gen)
         ar[i] = aj * ak
@@ -149,10 +149,10 @@ function get_all_coefficients(term_sum::TermProduct)
 
     # Then the complex terms
     nc = nr1 * nc2 + nc1 * nr2 + 2 * nc1 * nc2
-    ac = Array{Float64}(nc)
-    bc = Array{Float64}(nc)
-    cc = Array{Float64}(nc)
-    dc = Array{Float64}(nc)
+    ac = Array(Float64, nc)
+    bc = Array(Float64, nc)
+    cc = Array(Float64, nc)
+    dc = Array(Float64, nc)
 
     # real * complex
     gen = product(zip(c1[1], c1[2]), zip(c2[3:end]...))
@@ -260,7 +260,7 @@ end
 function get_real_coefficients(term::SHOTerm)
     Q = exp(term.log_Q)
     if Q >= 0.5
-        return Array{Float64}(0), Array{Float64}(0)
+        return Array(Float64, 0), Array(Float64, 0)
     end
     S0 = exp(term.log_S0)
     w0 = exp(term.log_omega0)
@@ -274,7 +274,7 @@ end
 function get_complex_coefficients(term::SHOTerm)
     Q = exp(term.log_Q)
     if Q < 0.5
-        return Array{Float64}(0), Array{Float64}(0), Array{Float64}(0), Array{Float64}(0)
+        return Array(Float64, 0), Array(Float64, 0), Array(Float64, 0), Array(Float64, 0)
     end
     S0 = exp(term.log_S0)
     w0 = exp(term.log_omega0)
