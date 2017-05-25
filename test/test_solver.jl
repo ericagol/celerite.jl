@@ -1,7 +1,4 @@
-using Base.Test
-import celerite
-
-function test_solver()
+@testset "Solver" begin
     srand(42)
     N = 100
     x = sort(10 .* rand(N))
@@ -25,5 +22,3 @@ function test_solver()
 
     @test isapprox(ll, ll0)
 end
-
-test_solver()
