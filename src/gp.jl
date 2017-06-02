@@ -400,21 +400,23 @@ function apply_inverse(gp::Celerite, y)
   return z
 end
 
-function simulate_gp_ldlt(gp::Celerite, y)
-# Multiplies Cholesky factor times random Gaussian vector (y is N(1,0) ) to simulate
+function simulate_gp_ldlt(gp::Celerite, z)
+# Multiplies Cholesky factor times random Gaussian vector (z is N(1,0) ) to simulate
 # a Gaussian process.
 # If iid is zeros, then draw from random normal deviates:
 # Check that Cholesky factor has been computed
 # Carry out multiplication
 # Return simulated correlated noise vector
 N=gp.n
-@assert(length(y)==N)
-z = zeros(Float64,N)
-z[1] = gp.sqrt(D[1])*y[1]
+@assert(length(z)==N)
+y = zeros(Float64,N)
+tmp = gp.sqrt(D[1])*z[1]
+y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* y[n-1])
-    z[n] = gp.sqrt(D[n])*y[n] + sum(gp.up[:,n].*f)
+    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* tmp)
+    tmp = gp.sqrt(D[n])*z[n]
+    y[n] = tmp + sum(gp.up[:,n].*f)
 end
 # Returns z=L.y
 return z
@@ -514,22 +516,13 @@ function predict_ldlt!(gp::Celerite, t, y, x)
 # Predict future times, x, based on a 'training set' of values y at times t.
 # Runs in O((M+N)J^2) (variance is not computed, though)
     a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
-    println("a_real: ",a_real)
-    println("c_real: ",c_real)
-    println("a_comp: ",a_comp)
-    println("b_comp: ",b_comp)
-    println("c_comp: ",c_comp)
-    println("d_comp: ",d_comp)
     N = length(y)
     M = length(x)
-    println("M: ",M)
-    println("N: ",N)
     J_real = length(a_real)
     J_comp = length(a_comp)
     J = J_real + 2*J_comp
 
     b = apply_inverse_ldlt(gp,y)
-    println("b: ",minimum(b),maximum(b))
     Q = zeros(J)
     X = zeros(J)
     pred = zeros(x)
@@ -600,22 +593,13 @@ function predict!(gp::Celerite, t, y, x)
 # Predict future times, x, based on a 'training set' of values y at times t.
 # Runs in O((M+N)J^2) (variance is not computed, though)
     a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
-    println("a_real: ",a_real)
-    println("c_real: ",c_real)
-    println("a_comp: ",a_comp)
-    println("b_comp: ",b_comp)
-    println("c_comp: ",c_comp)
-    println("d_comp: ",d_comp)
     N = length(y)
     M = length(x)
-    println("M: ",M)
-    println("N: ",N)
     J_real = length(a_real)
     J_comp = length(a_comp)
     J = J_real + 2*J_comp
 
     b = apply_inverse(gp,y)
-    println("b: ",minimum(b),maximum(b))
     Q = zeros(J)
     X = zeros(J)
     pred = zeros(x)
