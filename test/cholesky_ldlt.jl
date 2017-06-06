@@ -41,7 +41,7 @@
     N = N_test[itest]
     # Generate some random time data:
     t = sort(rand(N)).*100
-    y0 = sin.(t)
+#    y0 = sin.(t)
     i=1
     if J0 > 0
         kernel = celerite.RealTerm(log(aj[i]),log(cj[i]))
@@ -69,6 +69,9 @@
         #  else
     end
     logdet_test = celerite.compute_ldlt!(gp, t, yerr)
+    # Generate random noise, and a realization of the GP:
+    noise = randn(N)
+    y0 = celerite.simulate_gp_ldlt(gp,noise)
     time_zero = tic()
     for itrial = 1:ntrial
         logdet_test = celerite.compute_ldlt!(gp, t, yerr)
@@ -78,8 +81,19 @@
     # Now do full solve (if N_test isn't too big):
     if N < 2000
         logdetK,K = celerite.full_solve(t,y0,aj,bj,cj,dj,yerr)
-        @test logdetK ≈ logdet_test
-        @test K \ y0 ≈ celerite.apply_inverse_ldlt(gp, y0)
+# Check the log determinant:
+        println("Log det: ",logdetK,logdet_test)
+        @test isapprox(logdetK,logdet_test)
+# Check that the solver works:
+        z = celerite.apply_inverse_ldlt(gp, y0)
+        z_full = K \ y0
+        @test isapprox(z_full,z)
+# Check that the "chi-square" gives the correct value:
+        @test isapprox(dot(y0,z),dot(noise,noise))
+# Check that the log likelihood is computed correctly:
+        nll = log_likelihood_ldlt(gp, y0)
+        nll_full = -.5*(logdetK+N*log(2pi)+dot(z_full,z_full))
+        @test isapprox(nll,nll_full)
     end
     println(N_test[itest]," ",time_complex[itest])
     time_prior = time_complex[itest]
@@ -89,7 +103,7 @@
     ypred_full = celerite.predict_full_ldlt(gp, y0, tpred; return_cov = false)
     itest +=1
     #end
-    @test ypred ≈ ypred_full
+    @test isapprox(ypred,ypred_full)
 
     #loglog(N_test,time_complex)
     data = readdlm("c_speed.txt",',')

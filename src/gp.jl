@@ -410,12 +410,13 @@ function simulate_gp_ldlt(gp::Celerite, z)
 N=gp.n
 @assert(length(z)==N)
 y = zeros(Float64,N)
-tmp = gp.sqrt(D[1])*z[1]
+println("D[1]: ",gp.D[1])
+tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
     f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* tmp)
-    tmp = gp.sqrt(D[n])*z[n]
+    tmp = sqrt(gp.D[n])*z[n]
     y[n] = tmp + sum(gp.up[:,n].*f)
 end
 # Returns z=L.y
