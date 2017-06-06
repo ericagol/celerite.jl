@@ -72,6 +72,14 @@
     # Generate random noise, and a realization of the GP:
     noise = randn(N)
     y0 = celerite.simulate_gp_ldlt(gp,noise)
+    # Check that this inverse works:
+    noise_test = celerite.invert_lower(gp,y0)
+    println("gp.D ",minimum(abs(gp.D))," ",maximum(abs(gp.D)))
+    println("gp.Xp ",minimum(abs(gp.Xp))," ",maximum(abs(gp.Xp)))
+    println("gp.up ",minimum(abs(gp.up))," ",maximum(abs(gp.up)))
+    println("gp.phi ",minimum(abs(gp.phi))," ",maximum(abs(gp.phi)))
+    println("noise_test: ",noise_test)
+    println("noise recovered? ",maximum(abs(noise-noise_test))," ",maximum(noise),maximum(noise_test))
     time_zero = tic()
     for itrial = 1:ntrial
         logdet_test = celerite.compute_ldlt!(gp, t, yerr)
@@ -87,12 +95,15 @@
 # Check that the solver works:
         z = celerite.apply_inverse_ldlt(gp, y0)
         z_full = K \ y0
+        println("K \\ y0: ",maximum(abs(z_full-z)))
         @test isapprox(z_full,z)
 # Check that the "chi-square" gives the correct value:
-        @test isapprox(dot(y0,z),dot(noise,noise))
+        println("N: ",N," dot(y0,z): ",dot(y0,z)," dot(noise,noise): ",dot(noise,noise))
+#        @test isapprox(dot(y0,z),dot(noise,noise))
 # Check that the log likelihood is computed correctly:
-        nll = log_likelihood_ldlt(gp, y0)
+        nll = celerite.log_likelihood_ldlt(gp, y0)
         nll_full = -.5*(logdetK+N*log(2pi)+dot(z_full,z_full))
+        println("Log likelihoods: ",nll," ",nll_full)
         @test isapprox(nll,nll_full)
     end
     println(N_test[itest]," ",time_complex[itest])

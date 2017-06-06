@@ -5,7 +5,7 @@ type Celerite
     kernel::Term
     computed::Bool
     D::Vector{Float64}
-    Xp::Array{Float64}
+    W::Array{Float64}
     up::Array{Float64}
     phi::Array{Float64}
     x::Vector{Float64}
@@ -291,12 +291,12 @@ function compute_ldlt!(gp::Celerite, x, yerr = 0.0)
   coeffs = get_all_coefficients(gp.kernel)
   var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(var)," ",size(gp.Xp)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
+#  println(size(x)," ",size(var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.Xp, gp.phi, gp.up, gp.D)
-#  @time gp.D,gp.Xp,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
-  gp.D,gp.Xp,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
-  gp.J = size(gp.Xp)[1]
+#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.W, gp.phi, gp.up, gp.D)
+#  @time gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+  gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+  gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
 #  gp.logdet = sum(log(gp.D))
   logdet=0.0
@@ -316,17 +316,33 @@ function compute!(gp::Celerite, x, yerr = 0.0)
   coeffs = get_all_coefficients(gp.kernel)
   var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(var)," ",size(gp.Xp)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
+#  println(size(x)," ",size(var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.Xp, gp.phi, gp.up, gp.D)
-  @time gp.D,gp.Xp,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.Xp, gp.phi, gp.up, gp.D)
-  gp.J = size(gp.Xp)[1]
+#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.W, gp.phi, gp.up, gp.D)
+  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+  gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
   gp.logdet = 2 * sum(log.(gp.D))
 #  gp.logdet = sum(log(gp.D))
   gp.x = x
   gp.computed = true
   return gp.logdet
+end
+
+function invert_lower_ldlt(gp::Celerite,y)
+# Applies just the lower inverse:  L^{-1}.y:
+  @assert(gp.computed)
+  N = gp.n
+  @assert(length(y)==N)
+  z = zeros(Float64,N)
+# The following lines solve L.z = y for z:
+  z[1] = y[1]
+  f = zeros(Float64,gp.J)
+  for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
+    z[n] = (y[n] - sum(gp.up[:,n].*f))
+  end
+  return z
 end
 
 function invert_lower(gp::Celerite,y)
@@ -339,7 +355,7 @@ function invert_lower(gp::Celerite,y)
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
   for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
   end
   return z
@@ -356,7 +372,7 @@ function apply_inverse_ldlt(gp::Celerite, y)
   z[1] = y[1]
   f = zeros(Float64,gp.J)
   for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))
   end
 # The following solves L^T.z = y for z:
@@ -366,7 +382,7 @@ function apply_inverse_ldlt(gp::Celerite, y)
   f = zeros(Float64,gp.J)
   for n=N-1:-1:1 #in range(N-2, -1, -1):
     f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
-    z[n] = y[n]/ gp.D[n] - sum(gp.Xp[:,n].*f)
+    z[n] = y[n]/ gp.D[n] - sum(gp.W[:,n].*f)
   end
 # The result is the solution of L.L^T.z = y for z,
 # or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
@@ -383,7 +399,7 @@ function apply_inverse(gp::Celerite, y)
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
   for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* z[n-1])
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
   end
 # The following solves L^T.z = y for z:
@@ -393,7 +409,7 @@ function apply_inverse(gp::Celerite, y)
   f = zeros(Float64,gp.J)
   for n=N-1:-1:1 #in range(N-2, -1, -1):
     f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
-    z[n] = (y[n] - sum(gp.Xp[:,n].*f)) / gp.D[n]
+    z[n] = (y[n] - sum(gp.W[:,n].*f)) / gp.D[n]
   end
 # The result is the solution of L.L^T.z = y for z,
 # or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
@@ -414,7 +430,7 @@ tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* tmp)
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
     tmp = sqrt(gp.D[n])*z[n]
     y[n] = tmp + sum(gp.up[:,n].*f)
 end
@@ -435,7 +451,7 @@ z = zeros(Float64,N)
 z[1] = gp.D[1]*y[1]
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.Xp[:,n-1] .* y[n-1])
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* y[n-1])
     z[n] = gp.D[n]*y[n] + sum(gp.up[:,n].*f)
 end
 # Returns z=L.y
