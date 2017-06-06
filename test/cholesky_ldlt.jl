@@ -73,13 +73,8 @@
     noise = randn(N)
     y0 = celerite.simulate_gp_ldlt(gp,noise)
     # Check that this inverse works:
-    noise_test = celerite.invert_lower(gp,y0)
-    println("gp.D ",minimum(abs(gp.D))," ",maximum(abs(gp.D)))
-    println("gp.Xp ",minimum(abs(gp.Xp))," ",maximum(abs(gp.Xp)))
-    println("gp.up ",minimum(abs(gp.up))," ",maximum(abs(gp.up)))
-    println("gp.phi ",minimum(abs(gp.phi))," ",maximum(abs(gp.phi)))
-    println("noise_test: ",noise_test)
-    println("noise recovered? ",maximum(abs(noise-noise_test))," ",maximum(noise),maximum(noise_test))
+    noise_test = celerite.invert_lower_ldlt(gp,y0)./sqrt(gp.D)
+    println("noise recovered? ",maximum(abs(noise-noise_test))," ",maximum(noise)," ",maximum(noise_test))
     time_zero = tic()
     for itrial = 1:ntrial
         logdet_test = celerite.compute_ldlt!(gp, t, yerr)

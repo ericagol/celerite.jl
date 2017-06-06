@@ -339,8 +339,9 @@ function invert_lower_ldlt(gp::Celerite,y)
   z[1] = y[1]
   f = zeros(Float64,gp.J)
   for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
-    z[n] = (y[n] - sum(gp.up[:,n].*f))
+#    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
+    f = gp.phi[:,n] .* (f + gp.W[:,n-1] .* z[n-1])
+    z[n] = y[n] - sum(gp.up[:,n].*f)
   end
   return z
 end
