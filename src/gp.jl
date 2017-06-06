@@ -410,7 +410,6 @@ function simulate_gp_ldlt(gp::Celerite, z)
 N=gp.n
 @assert(length(z)==N)
 y = zeros(Float64,N)
-println("D[1]: ",gp.D[1])
 tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
