@@ -26,7 +26,8 @@
 
     # Run a timing test:
     #N_test = [64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288]
-    N_test = [512]
+#    N_test = [512]
+    N_test = [4]
     #N_test = [64,256,1024,4096,16384]
     #N_test = [N]
     ntest = length(N_test)
@@ -86,6 +87,42 @@
 # Check the log determinant:
         println("Log det: ",logdetK,logdet_test)
         @test isapprox(logdetK,logdet_test)
+# Check that simulation works:
+        K_lower = chol(K)'
+        y0_full = *(K_lower,noise)
+# Check factorization: (the following is incorrect since it's missing exponential factors)
+        Umat = copy(gp.up)
+        Wmat = copy(gp.W)
+        for n=1:N
+          if J0 > 0
+            for j=1:J0
+              Umat[j,n] *= exp(-cj[j]*t[n])
+              Wmat[j,n] *= exp( cj[j]*t[n])
+            end
+          end
+          if (J-J0) > 0
+            for j=1:J-J0
+              Umat[J0+2j-1,n] *= exp(-cj[j]*t[n])
+              Umat[J0+2j  ,n] *= exp(-cj[j]*t[n])
+              Wmat[J0+2j-1,n] *= exp( cj[j]*t[n])
+              Wmat[J0+2j  ,n] *= exp( cj[j]*t[n])
+            end
+          end
+        end
+        L = tril(*(Umat', Wmat), -1)
+        println(size(Umat),size(Wmat),size(L))
+        for i=1:N
+          L[i,i] = 1.0
+          for j=1:N
+            L[i,j] *=sqrt(gp.D[i])
+          end
+        end
+        println(K_lower)
+        println(L)
+        println(L-K_lower)
+        println("Cholesky error: ",maximum(abs(L - K_lower)))
+        println("Cholesky error: ",maximum(abs(*(L, L') - K)))
+        println("y0: ",maximum(abs(y0-y0_full)))
 # Check that the solver works:
         z = celerite.apply_inverse_ldlt(gp, y0)
         z_full = K \ y0
@@ -128,11 +165,4 @@
     #  end
     #end
 
-    # Check factorization:
-    #L = tril(*(u, X'), -1)
-    #for i=1:N
-    #  L[i,i]=D[i]
-    #end
-
-    #println("Cholesky error: ",maximum(abs(*(L, L') - K)))
 end
