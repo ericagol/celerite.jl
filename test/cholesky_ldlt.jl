@@ -1,5 +1,5 @@
 # Translating DFM's python version:
-
+using PyPlot
 @testset "Cholesky LDLT" for (J0, J) in ((1, 1), (0, 16))
     # J0 = Number of real, exponential celerite kernel terms
     # J  = Total number of terms
@@ -72,6 +72,8 @@
     # Generate random noise, and a realization of the GP:
     noise = randn(N)
     y0 = celerite.simulate_gp_ldlt(gp,noise)
+    plot(y0)
+    read(STDIN,Char)
     # Check that this inverse works:
     noise_test = celerite.invert_lower_ldlt(gp,y0)./sqrt(gp.D)
     println("noise recovered? ",maximum(abs(noise-noise_test))," ",maximum(noise)," ",maximum(noise_test))
