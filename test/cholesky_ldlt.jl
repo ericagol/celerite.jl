@@ -27,7 +27,7 @@
     # Run a timing test:
     #N_test = [64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288]
 #    N_test = [512]
-    N_test = [4]
+    N_test = [32]
     #N_test = [64,256,1024,4096,16384]
     #N_test = [N]
     ntest = length(N_test)
@@ -119,6 +119,9 @@
         end
         println("Cholesky error: ",maximum(abs(L - K_lower)))
         println("Cholesky error: ",maximum(abs(*(L, L') - K)))
+        println("y0: ",y0)
+        println("y0_full: ",y0_full)
+        println("D: ",gp.D)
         println("y0: ",maximum(abs(y0-y0_full)))
 # Check that the solver works:
         z = celerite.apply_inverse_ldlt(gp, y0)
