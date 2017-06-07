@@ -431,16 +431,16 @@ tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-#    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
-    for j=1:gp.J
-      f[j] = gp.phi[j,n-1]*(f[j]+gp.W[j,n-1]*tmp)
-    end
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
+#    for j=1:gp.J
+#      f[j] = gp.phi[j,n-1]*(f[j]+gp.W[j,n-1]*tmp)
+#    end
     tmp = sqrt(gp.D[n])*z[n]
-#    y[n] = tmp + sum(gp.up[:,n].*f)
-    y[n] = tmp 
-    for j=1:gp.J
-      y[n] += gp.up[j,n]*f[j]
-    end
+    y[n] = tmp + sum(gp.up[:,n].*f)
+#    y[n] = tmp 
+#    for j=1:gp.J
+#      y[n] += gp.up[j,n]*f[j]
+#    end
 end
 # Returns y=L.z
 return y
