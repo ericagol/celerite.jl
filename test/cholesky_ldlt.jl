@@ -114,7 +114,7 @@
         for i=1:N
           L[i,i] = 1.0
           for j=1:N
-            L[i,j] *=sqrt(gp.D[i])
+            L[i,j] *=sqrt(gp.D[j])
           end
         end
         println("Cholesky error: ",maximum(abs(L - K_lower)))
