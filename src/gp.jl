@@ -420,31 +420,26 @@ end
 function simulate_gp_ldlt(gp::Celerite, z)
 # Multiplies lower Cholesky factor times random Gaussian vector (z is N(1,0) ) to simulate
 # a Gaussian process.
-# If iid is zeros, then draw from random normal deviates:
 # Check that Cholesky factor has been computed
-# Carry out multiplication
-# Return simulated correlated noise vector
+@assert(gp.computed)
+# Check for length mismatch:
 N=gp.n
 @assert(length(z)==N)
+# If iid is zeros, then draw from random normal deviates:
+if maximum(abs(z)) == 0.0
+  z = randn(length(z))
+end
 y = zeros(Float64,N)
+# Carry out multiplication
 tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
-#    for j=1:gp.J
-#      f[j] = gp.phi[j,n-1]*(f[j]+gp.W[j,n-1]*tmp)
-#    end
     tmp = sqrt(gp.D[n])*z[n]
     y[n] = tmp + sum(gp.up[:,n].*f)
-#    y[n] = tmp 
-#    for j=1:gp.J
-#      y[n] += gp.up[j,n]*f[j]
-#    end
 end
-# Returns y=L.z
-println("z: ",z)
-println("y: ",y)
+# Return simulated correlated noise vector, y=L.z
 return y
 end
 

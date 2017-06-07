@@ -26,8 +26,7 @@
 
     # Run a timing test:
     #N_test = [64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288]
-#    N_test = [512]
-    N_test = [32]
+    N_test = [512]
     #N_test = [64,256,1024,4096,16384]
     #N_test = [N]
     ntest = length(N_test)
@@ -74,7 +73,8 @@
     y0 = celerite.simulate_gp_ldlt(gp,noise)
     # Check that this inverse works:
     noise_test = celerite.invert_lower_ldlt(gp,y0)./sqrt(gp.D)
-    println("noise recovered? ",maximum(abs(noise-noise_test))," ",maximum(noise)," ",maximum(noise_test))
+#    println("noise recovered? ",maximum(abs(noise-noise_test)))
+    @test isapprox(noise,noise_test)
     time_zero = tic()
     for itrial = 1:ntrial
         logdet_test = celerite.compute_ldlt!(gp, t, yerr)
@@ -117,16 +117,22 @@
             L[i,j] *=sqrt(gp.D[j])
           end
         end
-        println("Cholesky error: ",maximum(abs(L - K_lower)))
-        println("Cholesky error: ",maximum(abs(*(L, L') - K)))
-        println("y0: ",y0)
-        println("y0_full: ",y0_full)
-        println("D: ",gp.D)
-        println("y0: ",maximum(abs(y0-y0_full)))
+        # Check that lower cholesky matrix agrees with numerical cholesky decomposition of full matrix:
+        @test isapprox(L, K_lower)
+#        println("Cholesky error: ",maximum(abs(L - K_lower)))
+        # Check that reconstructed matrix agrees with full covariance matrix:
+        @test isapprox(abs(*(L, L'), K))
+#        println("Cholesky error: ",maximum(abs(*(L, L') - K)))
+#        println("y0: ",y0)
+#        println("y0_full: ",y0_full)
+#        println("D: ",gp.D)
+#        println("y0: ",maximum(abs(y0-y0_full)))
+        # Check that simulated vectors agree for low-rank and full cholesky multiplication:
+        @test isapprox(y0,y0_full)
 # Check that the solver works:
         z = celerite.apply_inverse_ldlt(gp, y0)
         z_full = K \ y0
-        println("K \\ y0: ",maximum(abs(z_full-z)))
+#        println("K \\ y0: ",maximum(abs(z_full-z)))
         @test isapprox(z_full,z)
 # Check that the "chi-square" gives the correct value:
         println("N: ",N," dot(y0,z): ",dot(y0,z)," dot(noise,noise): ",dot(noise,noise))
