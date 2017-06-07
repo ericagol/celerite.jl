@@ -88,9 +88,9 @@
         println("Log det: ",logdetK,logdet_test)
         @test isapprox(logdetK,logdet_test)
 # Check that simulation works:
-        K_lower = chol(K)'
+        K_lower = chol(K)'  # chol(K) returns upper triangular cholesky matrix, so we need to transpose.
         y0_full = *(K_lower,noise)
-# Check factorization: (the following is incorrect since it's missing exponential factors)
+# Check factorization by reconstructing cholesky factor from low-rank decomposition:
         Umat = copy(gp.up)
         Wmat = copy(gp.W)
         for n=1:N
@@ -110,16 +110,13 @@
           end
         end
         L = tril(*(Umat', Wmat), -1)
-        println(size(Umat),size(Wmat),size(L))
+        # Need to add in identity and then multipy by D^{1/2}:
         for i=1:N
           L[i,i] = 1.0
           for j=1:N
             L[i,j] *=sqrt(gp.D[i])
           end
         end
-        println(K_lower)
-        println(L)
-        println(L-K_lower)
         println("Cholesky error: ",maximum(abs(L - K_lower)))
         println("Cholesky error: ",maximum(abs(*(L, L') - K)))
         println("y0: ",maximum(abs(y0-y0_full)))

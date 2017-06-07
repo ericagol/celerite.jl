@@ -418,7 +418,7 @@ function apply_inverse(gp::Celerite, y)
 end
 
 function simulate_gp_ldlt(gp::Celerite, z)
-# Multiplies Cholesky factor times random Gaussian vector (z is N(1,0) ) to simulate
+# Multiplies lower Cholesky factor times random Gaussian vector (z is N(1,0) ) to simulate
 # a Gaussian process.
 # If iid is zeros, then draw from random normal deviates:
 # Check that Cholesky factor has been computed
@@ -431,9 +431,16 @@ tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
+#    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
+    for j=1:gp.J
+      f[j] = gp.phi[j,n-1]*(f[j]+gp.W[j,n-1]*tmp)
+    end
     tmp = sqrt(gp.D[n])*z[n]
-    y[n] = tmp + sum(gp.up[:,n].*f)
+#    y[n] = tmp + sum(gp.up[:,n].*f)
+    y[n] = tmp 
+    for j=1:gp.J
+      y[n] += gp.up[j,n]*f[j]
+    end
 end
 # Returns z=L.y
 return z
