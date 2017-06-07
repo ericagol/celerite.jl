@@ -442,8 +442,8 @@ for n =2:N # in range(1, N):
       y[n] += gp.up[j,n]*f[j]
     end
 end
-# Returns z=L.y
-return z
+# Returns y=L.z
+return y
 end
 
 function simulate_gp(gp::Celerite, y)
