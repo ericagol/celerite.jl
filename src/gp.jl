@@ -443,6 +443,8 @@ for n =2:N # in range(1, N):
 #    end
 end
 # Returns y=L.z
+println("z: ",z)
+println("y: ",y)
 return y
 end
 
