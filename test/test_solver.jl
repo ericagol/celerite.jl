@@ -14,8 +14,10 @@
     end
 
     # Compute using celerite
-    celerite.compute!(gp, x, yerr)
-    ll = celerite.log_likelihood(gp, y)
+#    celerite.compute!(gp, x, yerr)
+    celerite.compute_ldlt!(gp, x, yerr)
+#    ll = celerite.log_likelihood(gp, y)
+    ll = celerite.log_likelihood_ldlt(gp, y)
 
     # Compute directly
     ll0 = -0.5*(sum(y .* (K \ y)) + logdet(K) + N*log(2.0*pi))
