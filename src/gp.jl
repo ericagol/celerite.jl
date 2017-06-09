@@ -474,12 +474,13 @@ f = zeros(Float64,gp.J)
 for n =2:N
   f = gp.phi[:,n-1] .* (f + gp.vp[:,n-1].* z[n-1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-  y[n] += sum(gp.up[:,n].*f)
+  y[n] += sum(gp.up[:,n-1].*f)
 end
 # sweep downwards in n:
 f = zeros(Float64,gp.J)
 for n = N-1:1:-1
-  f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+#  f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+  f = gp.phi[:,n] .* (f +  gp.up[:,n].*z[n+1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   y[n] += sum(gp.vp[:,n].*f)
 end
