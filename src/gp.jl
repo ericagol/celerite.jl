@@ -448,7 +448,6 @@ a1 , c1, a2, b2, c2, d2= get_all_coefficients(gp.kernel)
 J1= length(a1)
 # Number of complex components:
 J2= length(a2)
-println("J1 :",J1," J2: ",J2)
 # Rank of semi-separable components:
 J = J1+ 2*J2
 N = length(x)

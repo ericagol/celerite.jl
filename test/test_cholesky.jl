@@ -1,5 +1,5 @@
 # Test suite for gp.jl
-@testset "Cholesky LDLT" for (J0, J, N_test) in ((1, 1, [64,1024]), (0, 16, [32,512]), (9,9,[14893348]))
+@testset "Cholesky LDLT" for (J0, J, N_test) in ((1, 1, [64,1024]), (0, 16, [32,512]), (4,9,[148933]))
     # J0 = Number of real, exponential celerite kernel terms
     # J  = Total number of terms
 
@@ -119,11 +119,8 @@
         @test isapprox(L, K_lower)
 #        println("Cholesky error: ",maximum(abs(L - K_lower)))
         # Check that reconstructed matrix agrees with full covariance matrix:
-        @test isapprox(*(L, L'), K)
 #        println("Cholesky error: ",maximum(abs(*(L, L') - K)))
-#        println("y0: ",y0)
-#        println("y0_full: ",y0_full)
-#        println("D: ",gp.D)
+        @test isapprox(*(L, L'), K)
 #        println("y0: ",maximum(abs(y0-y0_full)))
         # Check that simulated vectors agree for low-rank and full cholesky multiplication:
         @test isapprox(y0,y0_full)
@@ -135,8 +132,7 @@
 # Check that multiplication works:
 #        y_test = *(K,z)
         y_test = celerite.multiply_ldlt(gp, t, z, yerr)
-        println("Multiplication: ",maximum(abs(y0-y_test)))
-        println("y0: ",y0," y_test: ",y_test)
+#        println("Multiplication: ",maximum(abs(y0-y_test)))
         @test isapprox(y_test,y0)
 # Check that the "chi-square" gives the correct value:
 #        println("N: ",N," dot(y0,z): ",dot(y0,z)," dot(noise,noise): ",dot(noise,noise))
