@@ -4,6 +4,7 @@ include("terms.jl")
 type Celerite
     kernel::Term
     computed::Bool
+    var::Vector{Float64}
     D::Vector{Float64}
     W::Array{Float64}
     up::Array{Float64}
@@ -289,13 +290,13 @@ function compute_ldlt!(gp::Celerite, x, yerr = 0.0)
 # Call the choleksy function to decompose & update
 # the components of gp with X,D,V,U,etc. 
   coeffs = get_all_coefficients(gp.kernel)
-  var = yerr.^2 + zeros(Float64, length(x))
+  gp.var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
+#  println(size(x)," ",size(gp.var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.W, gp.phi, gp.up, gp.D)
-#  @time gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
-  gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.D)
+#  @time gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
+  gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
 #  gp.logdet = sum(log(gp.D))
@@ -314,12 +315,12 @@ function compute!(gp::Celerite, x, yerr = 0.0)
 # Call the choleksy function to decompose & update
 # the components of gp with X,D,V,U,etc. 
   coeffs = get_all_coefficients(gp.kernel)
-  var = yerr.^2 + zeros(Float64, length(x))
+  gp.var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
+#  println(size(x)," ",size(gp.var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), var, gp.W, gp.phi, gp.up, gp.D)
-  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.D)
+  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
   gp.logdet = 2 * sum(log.(gp.D))
@@ -443,6 +444,29 @@ end
 return y
 end
 
+function multiply_ldlt(gp::Celerite, z)
+# Multiplies the full matrix times a vector, z.
+# a Gaussian process.
+# Check that Cholesky factor has been computed
+@assert(gp.computed)
+# Check for length mismatch:
+N=gp.n
+a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
+@assert(length(z)==N)
+y = zeros(Float64,N)
+# Carry out multiplication
+for n=1:N
+  y[n] = (sum(a_real)+sum(a_comp))*
+f = zeros(Float64,gp.J)
+for n =2:N # in range(1, N):
+    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
+    tmp = sqrt(gp.D[n])*z[n]
+    y[n] = tmp + sum(gp.up[:,n].*f)
+end
+# Return simulated correlated noise vector, y=L.z
+return y
+end
+
 function simulate_gp(gp::Celerite, y)
 # Multiplies Cholesky factor times random Gaussian vector (y is N(1,0) ) to simulate
 # a Gaussian process.
@@ -512,7 +536,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
     end
   end
 # Diagonal components:
-  diag = fill(yerr^2 + sum(aj),N)
+  diag = fill(yerr.^2 + sum(aj),N)
 
 # Compute the kernel:
   K = zeros(Float64,N,N)
