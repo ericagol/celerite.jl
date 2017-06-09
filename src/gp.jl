@@ -448,6 +448,7 @@ a1 , c1, a2, b2, c2, d2= get_all_coefficients(gp.kernel)
 J1= length(a1)
 # Number of complex components:
 J2= length(a2)
+println("J1 :",J1," J2: ",J2)
 # Rank of semi-separable components:
 J = J1+ 2*J2
 N = length(x)
@@ -463,18 +464,30 @@ cd = cos(d2*x[1])
 sd = sin(d2*x[1])
 dx = 0.0
 for n=1:N-1
-  v[1:J1,n]=1.0
-  v[J1+1:J1+J2,n]= cd
-  v[J1+J2+1:J,n]= sd
+  if J1 > 0
+    v[1:J1,n]=1.0
+  end
+  if J2 > 0
+    v[J1+1:J1+J2,n]= cd
+    v[J1+J2+1:J,n]= sd
+  end
   cd = cos(d2*x[n+1])
   sd = sin(d2*x[n+1])
-  u[1:J1,n]= a1
-  u[J1+1:J1+J2,n]= a2.* cd + b2.* sd
-  u[J1+J2+1:J,n]= a2.* sd - b2.* cd
+  if J1 > 0
+    u[1:J1,n]= a1
+  end
+  if J2 > 0
+    u[J1+1:J1+J2,n]= a2.* cd + b2.* sd
+    u[J1+J2+1:J,n]= a2.* sd - b2.* cd
+  end
   dx = x[n+1] - x[n]
-  phi[1:J1,n]= exp(-c1*dx)
-  phi[J1+1:J1+J2,n]= exp(-c2*dx)
-  phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
+  if J1 > 0
+    phi[1:J1,n]= exp(-c1*dx)
+  end
+  if J2 > 0
+    phi[J1+1:J1+J2,n]= exp(-c2*dx)
+    phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
+  end
 end
 for n=1:N
   # This is A_{n,n} z_n from paper:
@@ -485,14 +498,14 @@ f = zeros(Float64,gp.J)
 for n =2:N
   f = phi[:,n-1] .* (f + v[:,n-1].* z[n-1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-  y[n] += sum(u[:,n-1].*f)
+  y[n] += dot(u[:,n-1],f)
 end
 # sweep downwards in n:
 f = zeros(Float64,gp.J)
 for n = N-1:1:-1
   f = phi[:,n] .* (f +  u[:,n].*z[n+1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-  y[n] += sum(v[:,n].*f)
+  y[n] += dot(v[:,n],f)
 end
 # Return result of multiplication:
 return y
