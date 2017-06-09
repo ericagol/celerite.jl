@@ -464,22 +464,23 @@ a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
 # Allocate vector that is result of multiplication:
 y = zeros(Float64,N)
 # Carry out multiplication
+asum = sum(a_real)+sum(a_comp)
 for n=1:N
   # This is A_{n,n} z_n from paper:
-  y[n] = (gp.var[n]+sum(a_real)+sum(a_comp))*z[n]
+  y[n] = (gp.var[n]+asum)*+z[n]
 end
 # sweep upwards in n:
 f = zeros(Float64,gp.J)
 for n =2:N
+  f = gp.phi[:,n-1] .* (f + gp.vp[:,n-1].* z[n-1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-  f = gp.phi[:,n-1] .* (f + gp.vp[n-1].* z[n-1])
   y[n] += sum(gp.up[:,n].*f)
 end
 # sweep downwards in n:
 f = zeros(Float64,gp.J)
 for n = N-1:1:-1
-  # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+  # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   y[n] += sum(gp.vp[:,n].*f)
 end
 # Return result of multiplication:
