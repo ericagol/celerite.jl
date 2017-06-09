@@ -467,7 +467,7 @@ y = zeros(Float64,N)
 asum = sum(a_real)+sum(a_comp)
 for n=1:N
   # This is A_{n,n} z_n from paper:
-  y[n] = (gp.var[n]+asum)*+z[n]
+  y[n] = (gp.var[n]+asum)*z[n]
 end
 # sweep upwards in n:
 f = zeros(Float64,gp.J)
