@@ -567,7 +567,8 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
     end
   end
 # Diagonal components:
-  diag = fill(yerr.^2 + sum(aj),N)
+#  diag = fill(yerr.^2 + sum(aj),N)
+  diag = yerr.^2 + sum(aj)
 
 # Compute the kernel:
   K = zeros(Float64,N,N)
