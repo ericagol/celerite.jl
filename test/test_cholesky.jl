@@ -90,12 +90,14 @@
         y0_full = *(K_lower,noise)
 # Check factorization by reconstructing cholesky factor from low-rank decomposition:
         Umat = copy(gp.up)
+        Vmat = copy(gp.vp)
         Wmat = copy(gp.W)
         for n=1:N
           if J0 > 0
             for j=1:J0
               Umat[j,n] *= exp(-cj[j]*t[n])
               Wmat[j,n] *= exp( cj[j]*t[n])
+              Vmat[j,n] *= exp( cj[j]*t[n])
             end
           end
           if (J-J0) > 0
@@ -104,6 +106,8 @@
               Umat[J0+2j  ,n] *= exp(-cj[j]*t[n])
               Wmat[J0+2j-1,n] *= exp( cj[j]*t[n])
               Wmat[J0+2j  ,n] *= exp( cj[j]*t[n])
+              Vmat[J0+2j-1,n] *= exp( cj[j]*t[n])
+              Vmat[J0+2j  ,n] *= exp( cj[j]*t[n])
             end
           end
         end
@@ -120,6 +124,12 @@
 #        println("Cholesky error: ",maximum(abs(L - K_lower)))
         # Check that reconstructed matrix agrees with full covariance matrix:
         @test isapprox(*(L, L'), K)
+        # Check that U,V decomposition works:
+        K_uv = tril(*(Umat', Vmat), -1)
+        K_uv += transpose(K_uv)
+        for n=1:N
+           K_uv[n] += gp.diag[n]
+        end
 #        println("Cholesky error: ",maximum(abs(*(L, L') - K)))
 #        println("y0: ",y0)
 #        println("y0_full: ",y0_full)
@@ -133,6 +143,8 @@
 #        println("K \\ y0: ",maximum(abs(z_full-z)))
         @test isapprox(z_full,z)
 # Check that multiplication works:
+        println("gp.var: ",gp.var)
+        println("gp.vp: ",gp.vp)
         y_test = celerite.multiply_ldlt(gp, z)
         println("Multiplication: ",maximum(abs(y0-y_test)))
         println("y0: ",y0," y_test: ",y_test)

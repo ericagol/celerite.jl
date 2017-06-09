@@ -4,11 +4,9 @@ include("terms.jl")
 type Celerite
     kernel::Term
     computed::Bool
-    var::Vector{Float64}
     D::Vector{Float64}
     W::Array{Float64}
     up::Array{Float64}
-    vp::Array{Float64}
     phi::Array{Float64}
     x::Vector{Float64}
     logdet::Float64
@@ -16,14 +14,15 @@ type Celerite
     J::Int64
 
 #    Celerite(kernel) = new(kernel, false, [], [], [], [], [])
-    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0),0.0,0,0)
+#    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0),0.0,0,0)
+    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0,0),zeros(Float64,0,0),zeros(Float64,0,0),zeros(Float64,0),0.0,0,0)
 end
 
 function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
                        a_comp::Vector{Float64}, b_comp::Vector{Float64}, 
                        c_comp::Vector{Float64}, d_comp::Vector{Float64},
-                       t::Vector{Float64}, diag::Vector{Float64}, X::Array{Float64,2}, 
-                       phi::Array{Float64,2}, u::Array{Float64,2}, v::Array{Float64,2}, D::Vector{Float64})
+                       t::Vector{Float64}, var::Vector{Float64}, X::Array{Float64,2}, 
+                       phi::Array{Float64,2}, u::Array{Float64,2}, D::Vector{Float64})
 #
 # Fast LDLT Cholesky solver based on low-rank decomposition due to Sivaram, plus
 # real implementation of celerite term.
@@ -40,19 +39,19 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
     phi = _reshape!(phi, J, N-1)
 # u, X & D are low-rank matrices and diagonal component:
     u = _reshape!(u, J, N)
-    v = _reshape!(v, J, N)
     X = _reshape!(X, J, N)
     D = _reshape!(D, N)
+    diag = _reshape!(D, N)
 
 # Sum over the diagonal kernel amplitudes:    
     a_sum = sum(a_real) + sum(a_comp)
 # Compute the first element:
-#    D[1] = sqrt(diag[1] + a_sum)
-    D[1] = diag[1] + a_sum
+#    D[1] = sqrt(var[1] + a_sum)
+    diag[1] = var[1]+a_sum
+    D[1] = diag[1]
     value = 1.0 / D[1]
     for j in 1:J_real
         u[j, 1] = a_real[j]
-        v[j, 1] = 1.0
         X[j, 1] = value
     end
 # We are going to compute cosine & sine recursively - allocate arrays for each complex
@@ -65,8 +64,6 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         sd[j] = sin(d_comp[j]*t[1])
         u[J_real+2*j-1, 1] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
         u[J_real+2*j  , 1] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
-        v[J_real+2*j-1, 1] = cd[j]
-        v[J_real+2*j  , 1] = sd[j]
         X[J_real+2*j-1, 1] = cd[j]*value
         X[J_real+2*j, 1]   = sd[j]*value
     end
@@ -91,7 +88,6 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         for j in 1:J_real
             phi[j, n-1] = exp(-c_real[j]*dx)
             u[j, n] = a_real[j]
-            v[j, n] = 1.0
             X[j, n] = 1.0
         end
 # Compute complex components:
@@ -107,8 +103,6 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         # Update u and initialize X
             u[J_real+2*j-1, n] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
             u[J_real+2*j  , n] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
-            v[J_real+2*j-1, n] = cd[j]
-            v[J_real+2*j  , n] = sd[j]
             X[J_real+2*j-1, n  ] = cd[j]
             X[J_real+2*j  , n  ] = sd[j]
         end
@@ -141,7 +135,8 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
             X[j, n] = Xj - tmp
         end
 # Finalize computation of D:
-        Dn = diag[n]+a_sum-2.0*Dn
+        diag[n] = var[n]+a_sum
+        Dn = diag[n]-2.0*Dn
         D[n] = Dn
 # Finalize computation of X:
         for j in 1:J
@@ -158,7 +153,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
     end
 # Finished looping over n.  Now return components to the calling routine
 # so that these may be used in arithmetic:
-    return D,X,u,v,phi
+    return D,X,u,phi
 end
 
 
@@ -298,13 +293,9 @@ function compute_ldlt!(gp::Celerite, x, yerr = 0.0)
 # Call the choleksy function to decompose & update
 # the components of gp with X,D,V,U,etc. 
   coeffs = get_all_coefficients(gp.kernel)
-  gp.var = yerr.^2 + zeros(Float64, length(x))
+  var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(gp.var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
-# Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
-#  @time gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
-  gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
+  gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
 #  gp.logdet = sum(log(gp.D))
@@ -323,12 +314,9 @@ function compute!(gp::Celerite, x, yerr = 0.0)
 # Call the choleksy function to decompose & update
 # the components of gp with X,D,V,U,etc. 
   coeffs = get_all_coefficients(gp.kernel)
-  gp.var = yerr.^2 + zeros(Float64, length(x))
+  var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-#  println(size(x)," ",size(gp.var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
-# Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.D)
-  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
+  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
   gp.logdet = 2 * sum(log.(gp.D))
@@ -452,39 +440,59 @@ end
 return y
 end
 
-function multiply_ldlt(gp::Celerite, z)
+function multiply_ldlt(gp::Celerite, x, z, yerr=0.0)
 # Multiplies the full matrix times a vector, z.
-# Check that Cholesky factorization has been computed:
-@assert(gp.computed)
-# Check for length mismatch:
-N=gp.n
 # Need to compute diagonal, so get coefficients:
-a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
+a1 , c1, a2, b2, c2, d2= get_all_coefficients(gp.kernel)
+# Number of real components:
+J1= length(a1)
+# Number of complex components:
+J2= length(a2)
+# Rank of semi-separable components:
+J = J1+ 2*J2
+N = length(x)
 @assert(length(z)==N)
 # Allocate vector that is result of multiplication:
 y = zeros(Float64,N)
 # Carry out multiplication
-asum = sum(a_real)+sum(a_comp)
+asum = sum(a1)+sum(a2)
+phi=zeros(J, N-1)
+u=zeros(J, N-1)
+v=zeros(J, N-1)
+cd = cos(d2*x[1])
+sd = sin(d2*x[1])
+dx = 0.0
+for n=1:N-1
+  v[1:J1,n]=1.0
+  v[J1+1:J_real+J2,n]= cd
+  v[J1+J2+1:J,n]= sd
+  cd = cos(d2*x[n+1])
+  sd = sin(d2*x[n+1])
+  u[1:J1,n]= a1
+  u[J1+1:J1+J2,n]= a2 * cd + b2 * sd
+  u[J1+J2+1:J,n]= a2 * sd - b2 * cd
+  dx = x[n+1] - x[n]
+  phi[1:J1,n]= exp(-c1*dx)
+  phi[J1+1:J1+J2,n]= exp(-c2*dx)
+  phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
+end
 for n=1:N
   # This is A_{n,n} z_n from paper:
-  y[n] = (gp.var[n]+asum)*z[n]
+  y[n] = (yerr[n]^2+asum)*z[n]
 end
 # sweep upwards in n:
 f = zeros(Float64,gp.J)
 for n =2:N
-  f = gp.phi[:,n-1] .* (f + gp.vp[:,n-1].* z[n-1])
+  f = phi[:,n-1] .* (f + v[:,n-1].* z[n-1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-#  y[n] += sum(gp.up[:,n-1].*f)
-  y[n] += sum(gp.up[:,n].*f)
+  y[n] += sum(u[:,n-1].*f)
 end
 # sweep downwards in n:
 f = zeros(Float64,gp.J)
 for n = N-1:1:-1
-  f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
-#   f = gp.phi[:,n] .* (f +  gp.up[:,n].*z[n+1])
+  f = phi[:,n] .* (f +  u[:,n].*z[n+1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
-  y[n] += sum(gp.vp[:,n].*f)
-#  y[n] += sum(gp.vp[:,n+1].*f)
+  y[n] += sum(v[:,n].*f)
 end
 # Return result of multiplication:
 return y
