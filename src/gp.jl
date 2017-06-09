@@ -546,7 +546,7 @@ function log_likelihood(gp::Celerite, y)
     return -0.5 * nll
 end
 
-function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Vector,yerr::Float64)
+function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Vector,yerr::Vector)
 # This carries out the full GP solver using linear algebra on full covariance matrix.
 # WARNING: do not use this with large datasets.
   N = length(t)
