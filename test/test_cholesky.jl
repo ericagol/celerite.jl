@@ -133,8 +133,8 @@
 #        println("K \\ y0: ",maximum(abs(z_full-z)))
         @test isapprox(z_full,z)
 # Check that multiplication works:
-        y_test = *(K,z)
-#        y_test = celerite.multiply_ldlt(gp, t, z, yerr)
+#        y_test = *(K,z)
+        y_test = celerite.multiply_ldlt(gp, t, z, yerr)
         println("Multiplication: ",maximum(abs(y0-y_test)))
         println("y0: ",y0," y_test: ",y_test)
         @test isapprox(y_test,y0)

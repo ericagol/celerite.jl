@@ -464,27 +464,19 @@ cd = cos(d2*x[1])
 sd = sin(d2*x[1])
 dx = 0.0
 for n=1:N-1
+  dx = x[n+1] - x[n]
   if J1 > 0
     v[1:J1,n]=1.0
-  end
-  if J2 > 0
-    v[J1+1:J1+J2,n]= cd
-    v[J1+J2+1:J,n]= sd
+    u[1:J1,n]= a1
+    phi[1:J1,n]= exp(-c1*dx)
   end
   cd = cos(d2*x[n+1])
   sd = sin(d2*x[n+1])
-  if J1 > 0
-    u[1:J1,n]= a1
-  end
   if J2 > 0
+    v[J1+1:J1+J2,n]= cd
+    v[J1+J2+1:J,n]= sd
     u[J1+1:J1+J2,n]= a2.* cd + b2.* sd
     u[J1+J2+1:J,n]= a2.* sd - b2.* cd
-  end
-  dx = x[n+1] - x[n]
-  if J1 > 0
-    phi[1:J1,n]= exp(-c1*dx)
-  end
-  if J2 > 0
     phi[J1+1:J1+J2,n]= exp(-c2*dx)
     phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
   end
@@ -502,7 +494,7 @@ for n =2:N
 end
 # sweep downwards in n:
 f = zeros(Float64,gp.J)
-for n = N-1:1:-1
+for n = N-1:-1:1
   f = phi[:,n] .* (f +  u[:,n].*z[n+1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   y[n] += dot(v[:,n],f)
