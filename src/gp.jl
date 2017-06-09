@@ -16,7 +16,7 @@ type Celerite
     J::Int64
 
 #    Celerite(kernel) = new(kernel, false, [], [], [], [], [])
-    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0))
+    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0),0.0,0,0)
 end
 
 function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
