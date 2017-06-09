@@ -302,9 +302,9 @@ function compute_ldlt!(gp::Celerite, x, yerr = 0.0)
   gp.n = length(x)
 #  println(size(x)," ",size(gp.var)," ",size(gp.W)," ",size(gp.phi)," ",size(gp.up)," ",size(gp.D))
 # Something is wrong with the following line, which I need to debug:  [ ]
-#  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.D)
-#  @time gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
-  gp.D,gp.W,gp.up,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.D)
+#  gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky!(coeffs..., convert(Vector{Float64},x), gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
+#  @time gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
+  gp.D,gp.W,gp.up,gp.vp,gp.phi = cholesky_ldlt!(coeffs..., x, gp.var, gp.W, gp.phi, gp.up, gp.vp, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
 #  gp.logdet = sum(log(gp.D))
@@ -347,7 +347,7 @@ function invert_lower_ldlt(gp::Celerite,y)
 # The following lines solve L.z = y for z:
   z[1] = y[1]
   f = zeros(Float64,gp.J)
-  for n =2:N # in range(1, N):
+  for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
 #    f = gp.phi[:,n] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = y[n] - sum(gp.up[:,n].*f)
@@ -364,7 +364,7 @@ function invert_lower(gp::Celerite,y)
 # The following lines solve L.z = y for z:
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
-  for n =2:N # in range(1, N):
+  for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
   end
@@ -381,7 +381,7 @@ function apply_inverse_ldlt(gp::Celerite, y)
 #  z[1] = y[1]/gp.D[1]
   z[1] = y[1]
   f = zeros(Float64,gp.J)
-  for n =2:N # in range(1, N):
+  for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))
   end
@@ -390,7 +390,7 @@ function apply_inverse_ldlt(gp::Celerite, y)
   z = zeros(Float64,N)
   z[N] = y[N] / gp.D[N]
   f = zeros(Float64,gp.J)
-  for n=N-1:-1:1 #in range(N-2, -1, -1):
+  for n=N-1:-1:1
     f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
     z[n] = y[n]/ gp.D[n] - sum(gp.W[:,n].*f)
   end
@@ -408,7 +408,7 @@ function apply_inverse(gp::Celerite, y)
 # The following lines solve L.z = y for z:
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
-  for n =2:N # in range(1, N):
+  for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
   end
@@ -417,7 +417,7 @@ function apply_inverse(gp::Celerite, y)
   z = zeros(Float64,N)
   z[N] = y[N] / gp.D[N]
   f = zeros(Float64,gp.J)
-  for n=N-1:-1:1 #in range(N-2, -1, -1):
+  for n=N-1:-1:1
     f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
     z[n] = (y[n] - sum(gp.W[:,n].*f)) / gp.D[n]
   end
@@ -443,7 +443,7 @@ y = zeros(Float64,N)
 tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
-for n =2:N # in range(1, N):
+for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
     tmp = sqrt(gp.D[n])*z[n]
     y[n] = tmp + sum(gp.up[:,n].*f)
@@ -454,26 +454,35 @@ end
 
 function multiply_ldlt(gp::Celerite, z)
 # Multiplies the full matrix times a vector, z.
-# a Gaussian process.
-# Check that Cholesky factor has been computed
+# Check that Cholesky factorization has been computed:
 @assert(gp.computed)
 # Check for length mismatch:
 N=gp.n
+# Need to compute diagonal, so get coefficients:
 a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
 @assert(length(z)==N)
+# Allocate vector that is result of multiplication:
 y = zeros(Float64,N)
 # Carry out multiplication
 for n=1:N
   # This is A_{n,n} z_n from paper:
   y[n] = (gp.var[n]+sum(a_real)+sum(a_comp))*z[n]
 end
-# sweep upwards in n
+# sweep upwards in n:
 f = zeros(Float64,gp.J)
-for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.vp[n-1].* z[n-1])
-    y[n] += sum(gp.up[:,n].*f)
+for n =2:N
+  # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
+  f = gp.phi[:,n-1] .* (f + gp.vp[n-1].* z[n-1])
+  y[n] += sum(gp.up[:,n].*f)
 end
-# Return simulated correlated noise vector, y=L.z
+# sweep downwards in n:
+f = zeros(Float64,gp.J)
+for n = N-1:1:-1
+  # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
+  f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
+  y[n] += sum(gp.vp[:,n].*f)
+end
+# Return result of multiplication:
 return y
 end
 
@@ -489,7 +498,7 @@ N=gp.n
 z = zeros(Float64,N)
 z[1] = gp.D[1]*y[1]
 f = zeros(Float64,gp.J)
-for n =2:N # in range(1, N):
+for n =2:N
     f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* y[n-1])
     z[n] = gp.D[n]*y[n] + sum(gp.up[:,n].*f)
 end

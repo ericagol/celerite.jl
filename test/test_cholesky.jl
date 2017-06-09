@@ -132,6 +132,10 @@
         z_full = K \ y0
 #        println("K \\ y0: ",maximum(abs(z_full-z)))
         @test isapprox(z_full,z)
+# Check that multiplication works:
+        y_test = celerite.multiply_ldlt(gp, z)
+        println("Multiplication: ",maximum(abs(y0-y_test)))
+        @test isapprox(y_test,y0)
 # Check that the "chi-square" gives the correct value:
 #        println("N: ",N," dot(y0,z): ",dot(y0,z)," dot(noise,noise): ",dot(noise,noise))
         @test isapprox(dot(y0,z),dot(noise,noise))
