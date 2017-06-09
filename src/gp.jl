@@ -470,11 +470,11 @@ for n=1:N-1
     u[1:J1,n]= a1
     phi[1:J1,n]= exp(-c1*dx)
   end
-  cd = cos(d2*x[n+1])
-  sd = sin(d2*x[n+1])
   if J2 > 0
     v[J1+1:J1+J2,n]= cd
     v[J1+J2+1:J,n]= sd
+    cd = cos(d2*x[n+1])
+    sd = sin(d2*x[n+1])
     u[J1+1:J1+J2,n]= a2.* cd + b2.* sd
     u[J1+J2+1:J,n]= a2.* sd - b2.* cd
     phi[J1+1:J1+J2,n]= exp(-c2*dx)
