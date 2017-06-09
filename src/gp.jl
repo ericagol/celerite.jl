@@ -8,6 +8,7 @@ type Celerite
     D::Vector{Float64}
     W::Array{Float64}
     up::Array{Float64}
+    vp::Array{Float64}
     phi::Array{Float64}
     x::Vector{Float64}
     logdet::Float64
@@ -22,7 +23,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
                        a_comp::Vector{Float64}, b_comp::Vector{Float64}, 
                        c_comp::Vector{Float64}, d_comp::Vector{Float64},
                        t::Vector{Float64}, diag::Vector{Float64}, X::Array{Float64,2}, 
-                       phi::Array{Float64,2}, u::Array{Float64,2}, D::Vector{Float64})
+                       phi::Array{Float64,2}, u::Array{Float64,2}, v::Array{Float64,2}, D::Vector{Float64})
 #
 # Fast LDLT Cholesky solver based on low-rank decomposition due to Sivaram, plus
 # real implementation of celerite term.
@@ -39,6 +40,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
     phi = _reshape!(phi, J, N-1)
 # u, X & D are low-rank matrices and diagonal component:
     u = _reshape!(u, J, N)
+    v = _reshape!(v, J, N)
     X = _reshape!(X, J, N)
     D = _reshape!(D, N)
 
@@ -50,6 +52,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
     value = 1.0 / D[1]
     for j in 1:J_real
         u[j, 1] = a_real[j]
+        v[j, 1] = 1.0
         X[j, 1] = value
     end
 # We are going to compute cosine & sine recursively - allocate arrays for each complex
@@ -62,6 +65,8 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         sd[j] = sin(d_comp[j]*t[1])
         u[J_real+2*j-1, 1] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
         u[J_real+2*j  , 1] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
+        v[J_real+2*j-1, 1] = cd[j]
+        v[J_real+2*j  , 1] = sd[j]
         X[J_real+2*j-1, 1] = cd[j]*value
         X[J_real+2*j, 1]   = sd[j]*value
     end
@@ -86,6 +91,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         for j in 1:J_real
             phi[j, n-1] = exp(-c_real[j]*dx)
             u[j, n] = a_real[j]
+            v[j, n] = 1.0
             X[j, n] = 1.0
         end
 # Compute complex components:
@@ -101,6 +107,8 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
         # Update u and initialize X
             u[J_real+2*j-1, n] = a_comp[j]*cd[j] + b_comp[j]*sd[j]
             u[J_real+2*j  , n] = a_comp[j]*sd[j] - b_comp[j]*cd[j]
+            v[J_real+2*j-1, n] = cd[j]
+            v[J_real+2*j  , n] = sd[j]
             X[J_real+2*j-1, n  ] = cd[j]
             X[J_real+2*j  , n  ] = sd[j]
         end
@@ -150,7 +158,7 @@ function cholesky_ldlt!(a_real::Vector{Float64}, c_real::Vector{Float64},
     end
 # Finished looping over n.  Now return components to the calling routine
 # so that these may be used in arithmetic:
-    return D,X,u,phi
+    return D,X,u,v,phi
 end
 
 
@@ -456,12 +464,14 @@ a_real, c_real, a_comp, b_comp, c_comp, d_comp = get_all_coefficients(gp.kernel)
 y = zeros(Float64,N)
 # Carry out multiplication
 for n=1:N
-  y[n] = (sum(a_real)+sum(a_comp))*
+  # This is A_{n,n} z_n from paper:
+  y[n] = (gp.var[n]+sum(a_real)+sum(a_comp))*z[n]
+end
+# sweep upwards in n
 f = zeros(Float64,gp.J)
 for n =2:N # in range(1, N):
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
-    tmp = sqrt(gp.D[n])*z[n]
-    y[n] = tmp + sum(gp.up[:,n].*f)
+    f = gp.phi[:,n-1] .* (f + gp.vp[n-1].* z[n-1])
+    y[n] += sum(gp.up[:,n].*f)
 end
 # Return simulated correlated noise vector, y=L.z
 return y
