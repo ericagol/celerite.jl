@@ -69,7 +69,7 @@
     # This simulates a Gaussian process with "gp" kernel:
     y0 = celerite.simulate_gp_ldlt(gp,noise)
     # Check that the inverse works:
-    noise_test = celerite.invert_lower_ldlt(gp,y0)./sqrt(gp.D)
+    noise_test = celerite.invert_lower_ldlt(gp,y0)./sqrt.(gp.D)
 #    println("noise recovered? ",maximum(abs(noise-noise_test)))
     @test isapprox(noise,noise_test)
     time_zero = tic()

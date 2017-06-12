@@ -423,7 +423,7 @@ function simulate_gp_ldlt(gp::Celerite, z)
 N=gp.n
 @assert(length(z)==N)
 # If iid is zeros, then draw from random normal deviates:
-if maximum(abs(z)) == 0.0
+if maximum(abs.(z)) == 0.0
   z = randn(length(z))
 end
 y = zeros(Float64,N)
@@ -432,7 +432,7 @@ tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* tmp)
+    f = gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* tmp)
     tmp = sqrt(gp.D[n])*z[n]
     y[n] = tmp + sum(gp.up[:,n].*f)
 end
@@ -459,24 +459,24 @@ asum = sum(a1)+sum(a2)
 phi=zeros(J, N-1)
 u=zeros(J, N-1)
 v=zeros(J, N-1)
-cd = cos(d2*x[1])
-sd = sin(d2*x[1])
+cd = cos.(d2 .* x[1])
+sd = sin.(d2 .* x[1])
 dx = 0.0
 for n=1:N-1
   dx = x[n+1] - x[n]
   if J1 > 0
     v[1:J1,n]=1.0
     u[1:J1,n]= a1
-    phi[1:J1,n]= exp(-c1*dx)
+    phi[1:J1,n]= exp.(-c1 .* dx)
   end
   if J2 > 0
     v[J1+1:J1+J2,n]= cd
     v[J1+J2+1:J,n]= sd
-    cd = cos(d2*x[n+1])
-    sd = sin(d2*x[n+1])
-    u[J1+1:J1+J2,n]= a2.* cd + b2.* sd
-    u[J1+J2+1:J,n]= a2.* sd - b2.* cd
-    phi[J1+1:J1+J2,n]= exp(-c2*dx)
+    cd = cos.(d2 .* x[n+1])
+    sd = sin.(d2 .* x[n+1])
+    u[J1+1:J1+J2,n]= a2 .* cd .+ b2.* sd
+    u[J1+J2+1:J,n] = a2 .* sd .- b2 .* cd
+    phi[J1+1:J1+J2,n]= exp.(-c2 .* dx)
     phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
   end
 end
