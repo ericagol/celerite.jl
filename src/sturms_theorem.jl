@@ -3,7 +3,7 @@
 using Polynomials
 
 function sturms_theorem(x)
-n_lor = round(Int64,length(x)/4)
+n_lor = round(Int, length(x)/4)
 pord = 2*(n_lor-1) + 1
 # Compute coefficients in the numerator & denominator of PSD:
 # The PSD is given by:

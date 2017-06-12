@@ -113,7 +113,7 @@ function get_parameter_vector(term_sum::TermSum)
 end
 
 function set_parameter_vector!(term_sum::TermSum, vector::Array)
-    index::Int64 = 1
+    index = 1
     for term in term_sum.terms
         len = length(term)
         set_parameter_vector!(term, vector[index:index+len-1])

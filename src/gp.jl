@@ -10,8 +10,8 @@ type Celerite
     phi::Array{Float64}
     x::Vector{Float64}
     logdet::Float64
-    n::Int64
-    J::Int64
+    n::Int
+    J::Int
 
 #    Celerite(kernel) = new(kernel, false, [], [], [], [], [])
 #    Celerite(kernel) = new(kernel, false, zeros(Float64,0),zeros(Float64,0),zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0,0), zeros(Float64,0),0.0,0,0)
