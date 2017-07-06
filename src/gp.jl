@@ -336,9 +336,9 @@ function invert_lower_ldlt(gp::Celerite,y)
   z[1] = y[1]
   f = zeros(Float64,gp.J)
   for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
-#    f = gp.phi[:,n] .* (f + gp.W[:,n-1] .* z[n-1])
-    z[n] = y[n] - sum(gp.up[:,n].*f)
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* z[n-1])
+#    f .= gp.phi[:,n] .* (f .+ gp.W[:,n-1] .* z[n-1])
+    z[n] = y[n] - dot(gp.up[:,n], f)
   end
   return z
 end
@@ -353,7 +353,7 @@ function invert_lower(gp::Celerite,y)
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
   for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* z[n-1])
     z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
   end
   return z
@@ -370,17 +370,17 @@ function apply_inverse_ldlt(gp::Celerite, y)
   z[1] = y[1]
   f = zeros(Float64,gp.J)
   for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
-    z[n] = (y[n] - sum(gp.up[:,n].*f))
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* z[n-1])
+    z[n] = (y[n] - dot(gp.up[:,n], f))
   end
 # The following solves L^T.z = y for z:
   y = copy(z)
-  z = zeros(Float64,N)
+  fill!(z, zero(Float64))
   z[N] = y[N] / gp.D[N]
-  f = zeros(Float64,gp.J)
+  fill!(f, zero(Float64))
   for n=N-1:-1:1
-    f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
-    z[n] = y[n]/ gp.D[n] - sum(gp.W[:,n].*f)
+    f .= gp.phi[:,n] .* (f .+  gp.up[:,n+1] .* z[n+1])
+    z[n] = y[n]/ gp.D[n] - dot(gp.W[:,n], f)
   end
 # The result is the solution of L.L^T.z = y for z,
 # or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
@@ -397,8 +397,8 @@ function apply_inverse(gp::Celerite, y)
   z[1] = y[1]/gp.D[1]
   f = zeros(Float64,gp.J)
   for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* z[n-1])
-    z[n] = (y[n] - sum(gp.up[:,n].*f))/gp.D[n]
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* z[n-1])
+    z[n] = (y[n] - dot(gp.up[:,n], f))/gp.D[n]
   end
 # The following solves L^T.z = y for z:
   y = copy(z)
@@ -407,7 +407,7 @@ function apply_inverse(gp::Celerite, y)
   f = zeros(Float64,gp.J)
   for n=N-1:-1:1
     f = gp.phi[:,n] .* (f +  gp.up[:,n+1].*z[n+1])
-    z[n] = (y[n] - sum(gp.W[:,n].*f)) / gp.D[n]
+    z[n] = (y[n] - dot(gp.W[:,n], f)) / gp.D[n]
   end
 # The result is the solution of L.L^T.z = y for z,
 # or z = {L.L^T}^{-1}.y = L^{T,-1}.L^{-1}.y
@@ -424,7 +424,7 @@ N=gp.n
 @assert(length(z)==N)
 # If iid is zeros, then draw from random normal deviates:
 if maximum(abs.(z)) == 0.0
-  z = randn(length(z))
+  randn!(z) # In Julia 0.6 this can be replaced with "z .= randn.()"
 end
 y = zeros(Float64,N)
 # Carry out multiplication
@@ -432,9 +432,9 @@ tmp = sqrt(gp.D[1])*z[1]
 y[1] = tmp
 f = zeros(Float64,gp.J)
 for n =2:N
-    f = gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* tmp)
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* tmp)
     tmp = sqrt(gp.D[n])*z[n]
-    y[n] = tmp + sum(gp.up[:,n].*f)
+    y[n] = tmp + dot(gp.up[:,n], f)
 end
 # Return simulated correlated noise vector, y=L.z
 return y
@@ -452,8 +452,6 @@ J2= length(a2)
 J = J1+ 2*J2
 N = length(x)
 @assert(length(z)==N)
-# Allocate vector that is result of multiplication:
-y = zeros(Float64,N)
 # Carry out multiplication
 asum = sum(a1)+sum(a2)
 phi=zeros(J, N-1)
@@ -465,36 +463,34 @@ dx = 0.0
 for n=1:N-1
   dx = x[n+1] - x[n]
   if J1 > 0
-    v[1:J1,n]=1.0
-    u[1:J1,n]= a1
-    phi[1:J1,n]= exp.(-c1 .* dx)
+    v[1:J1,n] .= 1.0
+    u[1:J1,n] .= a1
+    phi[1:J1,n] .= exp.(-c1 .* dx)
   end
   if J2 > 0
-    v[J1+1:J1+J2,n]= cd
-    v[J1+J2+1:J,n]= sd
-    cd = cos.(d2 .* x[n+1])
-    sd = sin.(d2 .* x[n+1])
-    u[J1+1:J1+J2,n]= a2 .* cd .+ b2.* sd
-    u[J1+J2+1:J,n] = a2 .* sd .- b2 .* cd
-    phi[J1+1:J1+J2,n]= exp.(-c2 .* dx)
-    phi[J1+J2+1:J,n]= phi[J1+1:J1+J2,n]
+    v[J1+1:J1+J2,n] .= cd
+    v[J1+J2+1:J,n]  .= sd
+    cd .= cos.(d2 .* x[n+1])
+    sd .= sin.(d2 .* x[n+1])
+    u[J1+1:J1+J2,n] .= a2 .* cd .+ b2.* sd
+    u[J1+J2+1:J,n]  .= a2 .* sd .- b2 .* cd
+    phi[J1+1:J1+J2,n] .= exp.(-c2 .* dx)
+    phi[J1+J2+1:J,n] .= phi[J1+1:J1+J2,n]
   end
 end
-for n=1:N
-  # This is A_{n,n} z_n from paper:
-  y[n] = (yerr[n]^2+asum)*z[n]
-end
+# This is A_{n,n} z_n from paper:
+y = (yerr .^ 2 .+ asum) .* z
 # sweep upwards in n:
 f = zeros(Float64,gp.J)
 for n =2:N
-  f = phi[:,n-1] .* (f + v[:,n-1].* z[n-1])
+  f .= phi[:,n-1] .* (f .+ v[:,n-1] .* z[n-1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   y[n] += dot(u[:,n-1],f)
 end
 # sweep downwards in n:
-f = zeros(Float64,gp.J)
+fill!(f, zero(Float64))
 for n = N-1:-1:1
-  f = phi[:,n] .* (f +  u[:,n].*z[n+1])
+  f .= phi[:,n] .* (f .+  u[:,n] .* z[n+1])
   # This is \sum_{j=1}^J \tilde U_{n,j} f^-_{n,j}
   y[n] += dot(v[:,n],f)
 end
@@ -515,8 +511,8 @@ z = zeros(Float64,N)
 z[1] = gp.D[1]*y[1]
 f = zeros(Float64,gp.J)
 for n =2:N
-    f = gp.phi[:,n-1] .* (f + gp.W[:,n-1] .* y[n-1])
-    z[n] = gp.D[n]*y[n] + sum(gp.up[:,n].*f)
+    f .= gp.phi[:,n-1] .* (f .+ gp.W[:,n-1] .* y[n-1])
+    z[n] = gp.D[n]*y[n] + dot(gp.up[:,n], f)
 end
 # Returns z=L.y
 return z
@@ -572,7 +568,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
   end
 # Diagonal components:
 #  diag = fill(yerr.^2 + sum(aj),N)
-  diag = yerr.^2 + sum(aj)
+  diag = yerr.^2 .+ sum(aj)
 
 # Compute the kernel:
   K = zeros(Float64,N,N)
@@ -589,7 +585,7 @@ function full_solve(t::Vector,y0::Vector,aj::Vector,bj::Vector,cj::Vector,dj::Ve
   for i=1:N
     K0[i,i] = diag[i]
   end
-  println("Semiseparable error: ", maximum(abs.(K - K0)))
+  println("Semiseparable error: ", maximum(abs.(K .- K0)))
   return logdet(K),K
 end
 
