@@ -693,9 +693,9 @@ function predict!(gp::Celerite, t, y, x)
           tref = t[N]
         end
         Q[1:J_real] .= (Q[1:J_real] .+ b[n]) .* exp.(-c_real .* (tref .- t[n]))
-        Q[J_real+1:J_real+J_comp] .= (Q[J_real+1:J_real+J_comp] .+ b[n] .* cos(d_comp .* t[n])) .*
+        Q[J_real+1:J_real+J_comp] .= (Q[J_real+1:J_real+J_comp] .+ b[n] .* cos.(d_comp .* t[n])) .*
             exp.(-c_comp .* (tref - t[n]))
-        Q[J_real+J_comp+1:J] .= (Q[J_real+J_comp+1:J] .+ b[n] .* sin(d_comp .* t[n])) .*
+        Q[J_real+J_comp+1:J] .= (Q[J_real+J_comp+1:J] .+ b[n] .* sin.(d_comp .* t[n])) .*
             exp.(-c_comp .* (tref - t[n]))
 
         while m < M+1 && (n == N || x[m] <= t[n+1])
