@@ -1,7 +1,7 @@
 import Base.+, Base.*, Base.length, Base.product
 
 # Abstract base class and definitions
-abstract Term
+abstract type Term end
 
 function get_terms(term::Term)
     return tuple(term)
