@@ -13,7 +13,7 @@ beta = om0/2/q*(1+im*sqrt(4.*q^2-1.))
 mat = zeros(nt,nt)
 for i=1:nt
   for j=1:nt
-    dt = abs(t[i]-t[j])
+    dt = abs.(t[i]-t[j])
     mat[i,j]=exp(-real(beta)*dt)*(real(alpha)*cos(imag(beta)*dt)+imag(alpha)*sin(imag(beta)*dt))
   end
 end
@@ -28,7 +28,7 @@ numuniquepts = ceil(Int64,(nfft+1)/2)
 
 spec = fft(sim)
 spec = spec[1:numuniquepts]
-spec = abs(spec).^2/nfft
+spec = abs.(spec).^2/nfft
 if rem(nfft,2) == 1
   spec[2:end]=spec[2:end]*2
 else
@@ -45,7 +45,7 @@ simn = sim + noise*randn(nt)
 
 specn = fft(simn)
 specn = specn[1:numuniquepts]
-specn = abs(specn).^2/nfft
+specn = abs.(specn).^2/nfft
 if rem(nfft,2) == 1
   specn[2:end]=specn[2:end]*2
 else
