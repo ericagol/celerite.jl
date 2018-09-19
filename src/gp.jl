@@ -316,7 +316,8 @@ function compute!(gp::Celerite, x, yerr = 0.0)
   coeffs = get_all_coefficients(gp.kernel)
   var = yerr.^2 + zeros(Float64, length(x))
   gp.n = length(x)
-  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+#  @time gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
+  gp.D,gp.W,gp.up,gp.phi = cholesky!(coeffs..., x, var, gp.W, gp.phi, gp.up, gp.D)
   gp.J = size(gp.W)[1]
 # Compute the log determinant (square the determinant of the Cholesky factor):
   gp.logdet = 2 * sum(log.(gp.D))
@@ -792,6 +793,28 @@ function predict_full_ldlt(gp::Celerite, y, t; return_cov=true, return_var=false
 
     cov = get_matrix(gp, t)
     cov = cov - Kxs * apply_inverse_ldlt(gp, KxsT)
+    return mu, cov
+end
+
+function predict(gp::Celerite, y, t; return_cov=true, return_var=false)
+# Prediction with covariance using full covariance matrix
+# WARNING: do not use this with large datasets!
+    alpha = apply_inverse(gp, y)
+    Kxs = get_matrix(gp, t, gp.x)
+    mu = Kxs * alpha
+    if !return_cov && !return_var
+        return mu
+    end
+
+    KxsT = transpose(Kxs)
+    if return_var
+        v = -sum(KxsT .* apply_inverse(gp, KxsT), 1)
+        v = v + get_value(gp.kernel, [0.0])[1]
+        return mu, v[1, :]
+    end
+
+    cov = get_matrix(gp, t)
+    cov = cov - Kxs * apply_inverse(gp, KxsT)
     return mu, cov
 end
 
