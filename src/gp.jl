@@ -786,7 +786,14 @@ function predict_full_ldlt(gp::Celerite, y, t; return_cov=true, return_var=false
 
     KxsT = transpose(Kxs)
     if return_var
-        v = -sum(KxsT .* apply_inverse_ldlt(gp, KxsT), 1)
+#        println("Size of y: ",size(y)," size of t: ",size(t)," size of KxsT: ",size(KxsT))
+        v = zeros(t)
+        for i=1:length(t)
+          v[i] = -sum(KxsT[:,i] .* apply_inverse_ldlt(gp, KxsT[:,i]))
+          if mod(i,100) == 0
+#            println(i," ",v[i])
+          end
+        end
         v = v + get_value(gp.kernel, [0.0])[1]
         return mu, v[1, :]
     end
@@ -808,9 +815,14 @@ function predict(gp::Celerite, y, t; return_cov=true, return_var=false)
 
     KxsT = transpose(Kxs)
     if return_var
-        v = -sum(KxsT .* apply_inverse(gp, KxsT), 1)
+        v=zeros(t)
+        for i=1:length(t)
+#        v = -sum(KxsT .* apply_inverse(gp, KxsT), 1)
+          v[i] = -sum(KxsT[:,i] .* apply_inverse(gp, KxsT[:,i]))
+        end
         v = v + get_value(gp.kernel, [0.0])[1]
-        return mu, v[1, :]
+#        return mu, v[1, :]
+        return mu, v
     end
 
     cov = get_matrix(gp, t)
